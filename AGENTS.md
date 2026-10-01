@@ -34,7 +34,8 @@ client/              # quiver fork: the single-page app
   tests/             # Vitest (framework/, composables/, state/, utils/) and Playwright (e2e/)
 server/              # Bun.serve: JSON API under /api, built client for everything else
 db/                  # openDb(), migrate(), migrations/NNNN_name.sql
-scripts/             # one-off CLI tasks (Trade Master setup)
+scripts/             # CLI tasks (Trade Master setup, nightly backup)
+deploy/              # VPS setup, release switch and rollback; runbook in deploy/README.md
 tests/               # bun test: server, db and (later) trading logic
 core/  agents/  jobs/   # arrive with later milestones: trading rules, model adapters, scheduler steps
 ```
