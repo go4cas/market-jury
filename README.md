@@ -24,3 +24,5 @@ For client work with hot reload, keep `bun run dev` running and start `bun run d
 ```sh
 bun run typecheck && bun run test && bun run test:e2e
 ```
+
+Running it on the VPS (setup, deploys, backups, restore): [deploy/README.md](deploy/README.md).

@@ -1,0 +1,51 @@
+name: Deploy
+
+# Ships main to the VPS: check, build, copy the release over SSH, switch to it, restart.
+# Stays off until the repository variable DEPLOY_ENABLED is "true" (see deploy/README.md).
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: deploy
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to the VPS
+    if: vars.DEPLOY_ENABLED == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version-file: .bun-version
+      - run: bun install --frozen-lockfile
+      - run: bun run typecheck
+      - run: bun run test
+      - run: bun run build
+
+      - name: Package the release
+        run: |
+          git archive --format=tar -o release.tar HEAD
+          tar -rf release.tar dist
+          gzip release.tar
+
+      - name: Ship it
+        env:
+          VPS_HOST: ${{ secrets.VPS_HOST }}
+          VPS_SSH_KEY: ${{ secrets.VPS_SSH_KEY }}
+          VPS_KNOWN_HOSTS: ${{ secrets.VPS_KNOWN_HOSTS }}
+        run: |
+          install -d -m 700 ~/.ssh
+          printf '%s\n' "$VPS_KNOWN_HOSTS" > ~/.ssh/known_hosts
+          printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          id="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_SHA::7}"
+          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "deploy@$VPS_HOST" \
+            "set -e; d=/srv/market-jury/releases/$id; mkdir \$d; tar -xz -C \$d; bash \$d/deploy/activate.sh" \
+            < release.tar.gz
