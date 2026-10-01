@@ -76,16 +76,22 @@ S3_BUCKET=market-jury-backups
 
 ### 6. First deploy and login
 
-Run the Deploy workflow from the Actions tab (or merge to `main`). Then, on the server:
+Add the repository variable `DEPLOY_ENABLED` = `true` (step 4), then run the Deploy workflow
+from the Actions tab (or merge to `main`). The app starts without any API keys; the Trader runs
+and market data wait for steps 7 and 8. Then, on the server:
 
 ```sh
 mj run trade-master:setup
+sudo systemctl start market-jury-backup && journalctl -u market-jury-backup -n 5
 ```
+
+The second line takes the first backup by hand; it should end with "Uploaded snapshots/...".
 
 ### 7. Market data
 
 In Alpaca (paper trading account), open "API Keys" and generate a key. On the server,
-`sudo nano /etc/market-jury/env` and fill in `ALPACA_KEY_ID` and `ALPACA_SECRET_KEY`, then
+`sudo nano /etc/market-jury/env` and fill in `ALPACA_KEY_ID` and `ALPACA_SECRET_KEY` (add the lines
+if they're missing: servers set up before this step existed don't have them), then
 `sudo systemctl restart market-jury`. Check it with a real run for the last trading day:
 
 ```sh
