@@ -16,7 +16,7 @@ describe('backup', () => {
 
     const copy = new Database(path, { readonly: true })
     expect(copy.query('SELECT gallery_enabled FROM settings WHERE id = 1').get()).toEqual({ gallery_enabled: 1 })
-    expect(copy.query('SELECT count(*) AS n FROM schema_migrations').get()).toEqual({ n: 1 })
+    expect(copy.query('SELECT count(*) AS n FROM schema_migrations').get()).toEqual(db.query('SELECT count(*) AS n FROM schema_migrations').get())
   })
 
   test('names snapshots by UTC time so they sort in order', () => {
