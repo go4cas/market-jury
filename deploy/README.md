@@ -116,6 +116,20 @@ mj run models:check
 
 It should end with "Every model answered". A FAIL line names the key or model version to fix.
 
+### 9. Before the first live run
+
+Open the app's address and log in as the Trade Master. On **Settings**:
+
+1. Check the line-up, the rules (cash, position cap) and the monthly budget.
+2. Run a **dry run**. It builds a briefing pack, asks every Trader for a decision and
+   checks the orders, without moving any money (it costs a few cents in model calls). Every
+   Trader should show an answer.
+3. Press **Start the experiment**. The first decisions happen that evening (New York time)
+   and fill at the next morning's open. From then on the app runs itself; pausing is on the
+   same screen.
+
+The Gallery (the public read-only view) stays closed until you tick "Open the Gallery" there.
+
 ## Everyday
 
 | To | Run on the server |

@@ -39,5 +39,7 @@ describe('server', () => {
     const res = await request('/')
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('x-frame-options')).toBe('DENY')
+    // Only this site's own scripts run: no inline scripts, nothing from elsewhere.
+    expect(res.headers.get('content-security-policy')).toContain("script-src 'self';")
   })
 })
