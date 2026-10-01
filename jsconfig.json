@@ -11,5 +11,5 @@
     "skipLibCheck": true,
     "resolveJsonModule": true
   },
-  "include": ["server", "db", "core", "market", "jobs", "scripts", "tests"]
+  "include": ["server", "db", "core", "market", "agents", "jobs", "scripts", "tests"]
 }

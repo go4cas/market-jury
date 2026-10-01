@@ -40,7 +40,7 @@ jobs/                # scheduler steps, e.g. floorRunner.js; each takes { db, ..
 scripts/             # CLI tasks (Trade Master setup, run the Floor Runner by hand, nightly backup)
 deploy/              # VPS setup, release switch and rollback; runbook in deploy/README.md
 tests/               # bun test: server, db, calendar, market data, jobs (fake Alpaca in tests/fake-alpaca.js)
-agents/              # arrives with the Traders milestone: model adapters and prompts
+agents/              # model adapters (AI SDK), Trader prompt and answer schema, lookup tools, Columnist, budget guard
 ```
 
 Layers, bottom up: SQLite → `db/` → domain (`core/`, `agents/`, `jobs/`) → JSON API (`server/`) → client. The scheduler calls the domain directly, so the API and the scheduler share one set of rules. Trading logic is plain functions that take a database handle; it never imports from `server/`.
@@ -56,6 +56,7 @@ bun run start               # production: serve API + dist/, run migrations on s
 bun run migrate             # apply pending migrations
 bun run trade-master:setup  # create/reset the Trade Master password + authenticator code
 bun run floor-runner [date] # collect prices/headlines and build the briefing pack for a day (needs Alpaca keys)
+bun run models:check        # one tiny request to every model in the line-up (needs the provider keys)
 bun run typecheck           # tsc over server/db/scripts/tests, then client/
 bun run test                # bun test (server) + vitest (client)
 bun run test:e2e            # Playwright: real Bun server, throwaway DB, built client
@@ -63,7 +64,7 @@ bun run test:e2e            # Playwright: real Bun server, throwaway DB, built c
 
 **Always run `bun run typecheck && bun run test && bun run test:e2e` before completing a task.** CI runs the same three plus the build. In a sandbox with a preinstalled Chromium, set `PLAYWRIGHT_CHROMIUM_PATH` (e.g. `/opt/pw-browsers/chromium`) instead of downloading browsers.
 
-Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`. API keys go in the server's environment file only, never in the repo or the browser.
+Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`, `ANTHROPIC_API_KEY`, `OPENAI_API_KEY`, `GOOGLE_GENERATIVE_AI_API_KEY`, `DEEPSEEK_API_KEY`. API keys go in the server's environment file only, never in the repo or the browser.
 
 ---
 
@@ -86,6 +87,7 @@ Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA
 - **Every write endpoint checks `isTradeMaster(db, req)`** and reads its body with `readJson()` (which insists on `application/json`). Public reads are allowed only when `settings.gallery_enabled = 1` or the Trade Master is logged in: fail closed.
 - Login: `Bun.password` (argon2id) + TOTP code (`server/totp.js`), one-time codes, 5 wrong tries lock it for 15 minutes, session cookie `mj_session` is httpOnly, Secure, SameSite=Strict, stored only as a SHA-256 hash.
 - Model output is data: parse it against a schema, never execute it. Lookup tools for models are read-only and capped.
+- Model calls (`agents/`): every attempt is a `runs` row with the exact prompt, raw response, tokens and cost (`agents/call.js`). Effort uses the AI SDK's portable `reasoning` setting. The shared instructions and briefing pack come first (Anthropic cache breakpoint after the pack); the Trader's own portfolio, last 10 decisions and journal come last. Tests use `tests/mock-model.js` with recorded answers in `tests/recorded/`.
 
 ---
 

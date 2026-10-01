@@ -1,0 +1,102 @@
+// One model call, as the PRD asks: every attempt is a stored run with its exact
+// prompt, raw response, tokens and cost. A failed call is retried up to 3
+// times; an answer that doesn't match the schema gets one repair attempt
+// (counted as one of those retries). The answer is parsed, never executed.
+import { generateText, isStepCount, NoObjectGeneratedError, Output } from 'ai'
+import { costOf, reasoningFor } from './models.js'
+
+/** @typedef {import('bun:sqlite').Database} Database */
+/** @typedef {import('ai').ModelMessage} ModelMessage */
+
+export const MAX_ATTEMPTS = 4
+
+/**
+ * @template T
+ * @typedef {object} CallOptions
+ * @property {Database} db
+ * @property {import('./models.js').ModelRow} model
+ * @property {import('ai').LanguageModel} languageModel
+ * @property {'trader' | 'columnist'} kind
+ * @property {number | null} [traderId]
+ * @property {number | null} [packId]
+ * @property {boolean} [dryRun]
+ * @property {string} system
+ * @property {ModelMessage[]} messages
+ * @property {import('zod').ZodType<T>} schema
+ * @property {Record<string, import('ai').Tool>} [tools]
+ * @property {number} [maxSteps] model calls allowed, counting tool rounds and the final answer
+ * @property {() => Date} now
+ * @property {(ms: number) => Promise<void>} [sleep]
+ * @property {typeof generateText} [generate] replaced in tests
+ */
+
+/**
+ * @template T
+ * @param {CallOptions<T>} o
+ * @returns {Promise<{ ok: true, output: T, runId: number, costMicro: number } | { ok: false, error: string, runId: number, costMicro: number }>}
+ */
+export async function callModel(o) {
+  const { db, model, kind, traderId = null, packId = null, dryRun = false, now, sleep = (ms) => Bun.sleep(ms), generate = generateText } = o
+  let messages = o.messages
+  let repaired = false
+  let costMicro = 0
+  let runId = 0
+  let error = ''
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS; attempt++) {
+    runId = /** @type {{ id: number }} */ (
+      db.query(`INSERT INTO runs (kind, trader_id, model_id, pack_id, dry_run, status, attempt, prompt, started_at)
+                VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?) RETURNING id`)
+        .get(kind, traderId, model.id, packId, dryRun ? 1 : 0, attempt, JSON.stringify({ system: o.system, messages }), now().toISOString())
+    ).id
+    try {
+      const result = await generate({
+        model: o.languageModel,
+        system: o.system,
+        messages,
+        output: Output.object({ schema: o.schema }),
+        tools: o.tools,
+        stopWhen: isStepCount(o.maxSteps ?? 1),
+        reasoning: reasoningFor(model),
+        maxRetries: 0,
+      })
+      const output = /** @type {T} */ (result.output)
+      const toolCalls = result.steps.flatMap((s) => s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })))
+      costMicro += finish(db, runId, model, result.totalUsage, { status: 'succeeded', response: JSON.stringify({ text: result.text, toolCalls }), now })
+      return { ok: true, output, runId, costMicro }
+    } catch (e) {
+      error = e instanceof Error ? e.message : String(e)
+      if (NoObjectGeneratedError.isInstance(e)) {
+        costMicro += finish(db, runId, model, e.usage, { status: 'failed', response: e.text ?? null, error: `The answer didn't match the expected format: ${error}`, now })
+        if (!repaired) {
+          // One repair attempt: show the model its answer and what was wrong with it.
+          repaired = true
+          messages = [...o.messages,
+            { role: 'assistant', content: e.text ?? '' },
+            { role: 'user', content: `That answer didn't match the required format (${error}). Reply again with only the corrected answer in the required format.` }]
+          continue
+        }
+      } else {
+        costMicro += finish(db, runId, model, undefined, { status: 'failed', response: null, error, now })
+      }
+      if (attempt < MAX_ATTEMPTS) await sleep(2 ** attempt * 1000)
+    }
+  }
+  return { ok: false, error, runId, costMicro }
+}
+
+/**
+ * @param {Database} db
+ * @param {number} runId
+ * @param {import('./models.js').ModelRow} model
+ * @param {import('ai').LanguageModelUsage | undefined} usage
+ * @param {{ status: 'succeeded' | 'failed', response: string | null, error?: string | null, now: () => Date }} r
+ * @returns {number} the call's cost
+ */
+function finish(db, runId, model, usage, { status, response, error = null, now }) {
+  const tokens = { input: usage?.inputTokens ?? 0, cached: usage?.inputTokenDetails?.cacheReadTokens ?? 0, output: usage?.outputTokens ?? 0 }
+  const cost = costOf(model, tokens)
+  db.run(`UPDATE runs SET status = ?, response = ?, error = ?, tokens_in = ?, tokens_cached = ?, tokens_out = ?, cost_micro = ?, finished_at = ? WHERE id = ?`,
+    [status, response, error, tokens.input, tokens.cached, tokens.output, cost, now().toISOString(), runId])
+  return cost
+}

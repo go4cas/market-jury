@@ -95,6 +95,27 @@ mj run floor-runner
 It should end with "Briefing pack for ... is ready". Alpaca is used for market data only; the
 app never sends it orders.
 
+### 8. Model API keys
+
+Create an API key with each provider (Anthropic, OpenAI, Google AI Studio, DeepSeek) and set a
+monthly spending limit there as a second safety net. On the server, `sudo nano /etc/market-jury/env`
+and fill in the lines below (add any that are missing), then `sudo systemctl restart market-jury`:
+
+```
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+GOOGLE_GENERATIVE_AI_API_KEY=
+DEEPSEEK_API_KEY=
+```
+
+Check every model answers (one tiny request each, a fraction of a cent):
+
+```sh
+mj run models:check
+```
+
+It should end with "Every model answered". A FAIL line names the key or model version to fix.
+
 ## Everyday
 
 | To | Run on the server |
