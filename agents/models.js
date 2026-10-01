@@ -33,20 +33,21 @@ const PROVIDER_NAMES = { anthropic: 'Anthropic', openai: 'OpenAI', google: 'Goog
 const perMillion = (dollars) => Math.round(dollars * 1_000_000)
 
 /**
- * The Balanced line-up (PRD, chosen 1 October 2026), all at medium effort,
+ * The Balanced line-up (PRD, chosen 1 October 2026), at medium effort (DeepSeek: high),
  * plus the Columnist's two models. Prices are per million tokens from the PRD;
  * cached-input prices are each provider's published discount on repeated input.
- * Model versions and cached prices are checked against the providers with
- * `bun run models:check` before the experiment starts.
+ * Model versions are checked against the providers with `bun run models:check`;
+ * prices were checked on the providers' own pricing pages on 1 October 2026.
  */
 export const LINE_UP = {
   traders: [
     { name: 'Claude', colourSlot: 1, provider: 'anthropic', model_version: 'claude-sonnet-5-5', effort: 'medium', input: 2, cached: 0.2, output: 10 },
-    { name: 'GPT', colourSlot: 2, provider: 'openai', model_version: 'gpt-6.1-sol', effort: 'medium', input: 1, cached: 0.1, output: 5 },
+    { name: 'GPT', colourSlot: 2, provider: 'openai', model_version: 'gpt-6.1-sol', effort: 'medium', input: 1, cached: 0.05, output: 5 },
     // Priced at its 1 January 2027 rate, as the paper phase runs into 2027.
     { name: 'Gemini', colourSlot: 3, provider: 'google', model_version: 'gemini-3.8-flash', effort: 'medium', input: 1.5, cached: 0.15, output: 7.5 },
-    // Off-peak rate: runs happen after the US close.
-    { name: 'DeepSeek', colourSlot: 4, provider: 'deepseek', model_version: 'deepseek-v4-pro', effort: 'medium', input: 0.66, cached: 0.066, output: 1.98 },
+    // Off-peak rate: runs happen after the US close. DeepSeek has no medium
+    // effort (the AI SDK maps it to high), so the record says high.
+    { name: 'DeepSeek', colourSlot: 4, provider: 'deepseek', model_version: 'deepseek-v4-pro', effort: 'high', input: 0.66, cached: 0.022, output: 1.98 },
   ],
   columnist: {
     daily: { provider: 'anthropic', model_version: 'claude-haiku-4-5', effort: 'default', input: 1, cached: 0.1, output: 5 },
