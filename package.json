@@ -14,6 +14,7 @@
     "migrate": "bun db/migrate.js",
     "trade-master:setup": "bun scripts/setup-trade-master.js",
     "floor-runner": "bun scripts/floor-runner.js",
+    "models:check": "bun scripts/models-check.js",
     "test": "bun test && vitest run",
     "test:server": "bun test",
     "test:client": "vitest run",
@@ -21,7 +22,13 @@
     "typecheck": "tsc --project jsconfig.json && tsc --project client/jsconfig.json"
   },
   "dependencies": {
-    "@arrow-js/core": "^1.0.6"
+    "@ai-sdk/anthropic": "^4.0.71",
+    "@ai-sdk/deepseek": "^3.0.58",
+    "@ai-sdk/google": "^4.0.87",
+    "@ai-sdk/openai": "^4.0.83",
+    "@arrow-js/core": "^1.0.6",
+    "ai": "^7.0.126",
+    "zod": "^4.6.5"
   },
   "devDependencies": {
     "@playwright/test": "^1.63.0",

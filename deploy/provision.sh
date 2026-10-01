@@ -115,6 +115,12 @@ S3_BUCKET=
 # Alpaca market data for the Floor Runner (see deploy/README.md)
 ALPACA_KEY_ID=
 ALPACA_SECRET_KEY=
+
+# Model providers for the Traders and the Market Columnist (see deploy/README.md)
+ANTHROPIC_API_KEY=
+OPENAI_API_KEY=
+GOOGLE_GENERATIVE_AI_API_KEY=
+DEEPSEEK_API_KEY=
 EOF
 fi
 chown root:"$APP_USER" "$ENV_FILE"

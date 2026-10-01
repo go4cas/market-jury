@@ -1,0 +1,9 @@
+{
+  "orders": [
+    { "side": "buy", "ticker": "AAPL", "amount_usd": 300, "sell_all": false, "reason": "Steady gains and a new phone launch; a core holding." },
+    { "side": "buy", "ticker": "SPY", "amount_usd": 150, "sell_all": false, "reason": "Broad market exposure while I learn the pack." }
+  ],
+  "no_trades_reason": null,
+  "market_view": "Large caps drifted higher on light volume. I am starting cautiously with a broad fund and one quality name.",
+  "journal": "Day one. Bought AAPL and SPY, kept over half in cash. Plan: add on pullbacks, cut anything down 10% from cost."
+}
