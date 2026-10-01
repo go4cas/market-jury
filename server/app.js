@@ -1,5 +1,8 @@
 import { join, resolve, sep } from 'node:path'
+import { createAlpaca } from '../market/alpaca.js'
+import { adminRoutes } from './admin.js'
 import { authRoutes, isTradeMaster } from './auth.js'
+import { config } from './config.js'
 import { json, error, withSecurityHeaders } from './http.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
@@ -12,9 +15,11 @@ import { json, error, withSecurityHeaders } from './http.js'
  * @param {number} options.port 0 picks a free port (tests)
  * @param {string} options.clientDir folder holding the built client (index.html)
  * @param {() => number} [options.now]
+ * @param {import('../jobs/schedule.js').StepContext} [options.steps] what the scheduler and dry run use (tests pass fakes)
  */
-export function startServer({ db, port, clientDir, now }) {
+export function startServer({ db, port, clientDir, now, steps }) {
   const root = resolve(clientDir)
+  const context = steps ?? { db, now: () => new Date(now ? now() : Date.now()), alpaca: createAlpaca(config.alpaca) }
 
   return Bun.serve({
     port,
@@ -29,6 +34,7 @@ export function startServer({ db, port, clientDir, now }) {
       },
 
       ...authRoutes(db, { now }),
+      ...adminRoutes(context),
 
       '/api/*': () => error(404, 'There is nothing at this address.'),
     },

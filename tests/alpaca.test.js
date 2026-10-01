@@ -93,7 +93,8 @@ describe('Alpaca client', () => {
     expect(alpaca.calendar('2026-11-20', '2026-11-30')).rejects.toThrow('Alpaca did not answer')
   })
 
-  test('refuses to start without keys', () => {
-    expect(() => createAlpaca({ keyId: '', secretKey: '' })).toThrow('ALPACA_KEY_ID')
+  test('refuses to fetch without keys, but can be created (so the server starts without them)', async () => {
+    const alpaca = createAlpaca({ keyId: '', secretKey: '' })
+    await expect(alpaca.calendar('2026-11-01', '2026-11-30')).rejects.toThrow('ALPACA_KEY_ID')
   })
 })

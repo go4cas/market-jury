@@ -36,7 +36,7 @@ server/              # Bun.serve: JSON API under /api, built client for everythi
 db/                  # openDb(), migrate(), migrations/NNNN_name.sql
 core/                # trading rules as plain functions: money, calendar, portfolio, complianceDesk, openingBell, traders, books, metrics
 market/              # market data: Alpaca client, stock menu (stock-menu.json), store, briefing packs
-jobs/                # scheduler steps, e.g. floorRunner.js; each takes { db, ...clients, date } and is safe to re-run
+jobs/                # schedule.js (steps on the NY calendar, step_runs, catch-up, pause), experiment.js (line-up, start, dry run), floorRunner.js
 scripts/             # CLI tasks (Trade Master setup, run the Floor Runner by hand, nightly backup)
 deploy/              # VPS setup, release switch and rollback; runbook in deploy/README.md
 tests/               # bun test: server, db, calendar, market data, jobs (fake Alpaca in tests/fake-alpaca.js)
@@ -87,6 +87,7 @@ Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA
 - **Every write endpoint checks `isTradeMaster(db, req)`** and reads its body with `readJson()` (which insists on `application/json`). Public reads are allowed only when `settings.gallery_enabled = 1` or the Trade Master is logged in: fail closed.
 - Login: `Bun.password` (argon2id) + TOTP code (`server/totp.js`), one-time codes, 5 wrong tries lock it for 15 minutes, session cookie `mj_session` is httpOnly, Secure, SameSite=Strict, stored only as a SHA-256 hash.
 - Model output is data: parse it against a schema, never execute it. Lookup tools for models are read-only and capped.
+- Admin routes live in `server/admin.js`; every one, reads included, needs the Trade Master. The scheduler (`jobs/schedule.js`) runs inside the server process once a minute and is the only thing that runs steps; the API only starts, pauses, rehearses or re-runs. A step is one `step_runs` row per (step, trading date): add a step by adding to `STEPS` with its due time and `after` steps.
 - Model calls (`agents/`): every attempt is a `runs` row with the exact prompt, raw response, tokens and cost (`agents/call.js`). Effort uses the AI SDK's portable `reasoning` setting. The shared instructions and briefing pack come first (Anthropic cache breakpoint after the pack); the Trader's own portfolio, last 10 decisions and journal come last. Tests use `tests/mock-model.js` with recorded answers in `tests/recorded/`.
 
 ---

@@ -58,8 +58,7 @@ export function createAlpaca({
   fetch = globalThis.fetch,
   sleep = Bun.sleep,
 }) {
-  if (!keyId || !secretKey) throw new Error('Alpaca keys are missing: set ALPACA_KEY_ID and ALPACA_SECRET_KEY in the server environment.')
-  const headers = { 'APCA-API-KEY-ID': keyId, 'APCA-API-SECRET-KEY': secretKey, Accept: 'application/json' }
+  const headers = { 'APCA-API-KEY-ID': keyId ?? '', 'APCA-API-SECRET-KEY': secretKey ?? '', Accept: 'application/json' }
 
   /**
    * GET with retries on rate limits and server errors.
@@ -69,6 +68,8 @@ export function createAlpaca({
    * @returns {Promise<any>}
    */
   async function get(base, path, params) {
+    // Checked per call, so the server starts without keys and only market-data steps fail.
+    if (!keyId || !secretKey) throw new Error('Alpaca keys are missing: set ALPACA_KEY_ID and ALPACA_SECRET_KEY in the server environment.')
     const url = new URL(path, base)
     for (const [key, value] of Object.entries(params)) if (value !== undefined) url.searchParams.set(key, String(value))
 
