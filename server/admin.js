@@ -102,6 +102,18 @@ export function adminRoutes(ctx) {
       }),
     },
 
+    '/api/admin/packs': {
+      GET: guarded((req) => {
+        const url = new URL(req.url)
+        const kind = url.searchParams.get('kind') === 'weekly' ? 'weekly' : 'daily'
+        const dates = db.query('SELECT trading_date FROM briefing_packs WHERE kind = ? ORDER BY trading_date DESC').values(kind).map(([d]) => String(d))
+        const date = url.searchParams.get('date') ?? dates[0] ?? null
+        const pack = /** @type {{ content: string, created_at: string } | null} */ (date ? db.query('SELECT content, created_at FROM briefing_packs WHERE kind = ? AND trading_date = ?').get(kind, date) : null)
+        if (date && !pack) return error(404, `There is no ${kind} briefing pack for ${date}.`)
+        return json({ kind, date, dates, createdAt: pack?.created_at ?? null, pack: pack ? JSON.parse(pack.content) : null })
+      }),
+    },
+
     '/api/admin/costs': {
       GET: guarded(() => {
         const b = budget(db, ctx.now())

@@ -4,8 +4,12 @@ import { sessionState } from '../state/sessionState.js'
 import { ThemeToggle } from '../components/ThemeToggle.js'
 import { ToastContainer } from '../components/ToastContainer.js'
 import { Link } from '../components/Link.js'
+import { TradeMasterNotice } from '../components/TradeMasterNotice.js'
 
-const navItem = 'inline-flex min-h-11 items-center rounded-control px-3 font-mono text-sm text-fg-soft hover:bg-surface-inset hover:text-fg [&[aria-current=page]]:bg-brand-tint [&[aria-current=page]]:text-brand'
+const navItem = 'inline-flex min-h-11 shrink-0 items-center rounded-control px-3 font-mono text-sm text-fg-soft hover:bg-surface-inset hover:text-fg [&[aria-current=page]]:bg-brand-tint [&[aria-current=page]]:text-brand'
+
+const PUBLIC = [['/', 'Overview'], ['/standings', 'Standings'], ['/yesterday', 'Yesterday'], ['/history', 'History'], ['/columnist', 'Columnist'], ['/compare', 'Compare']]
+const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs'], ['/admin/briefing', 'Briefing pack']]
 
 // The compact top bar every screen shares: logo mark, name, navigation, the
 // Trade Master pill when Cas is logged in, and the paper-trading notice.
@@ -26,21 +30,22 @@ export function AppLayout(content) {
             <span class="font-display text-lg font-bold text-fg">Market Jury</span>
           </a>
 
-          <nav class="flex flex-1 items-center gap-1" aria-label="Main">${Link({ to: '/', children: 'Overview', class: navItem })}</nav>
-
-          <div class="flex items-center gap-2">
+          <div class="ml-auto flex items-center gap-2 sm:order-last">
             ${() => sessionState.tradeMaster
-              ? html`<span class="rounded-full border border-brand px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-brand">TRADE MASTER</span>`
+              ? html`<span class="whitespace-nowrap rounded-full border border-brand px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-brand">TRADE MASTER</span>`
               : ''}
             ${ThemeToggle()}
-            ${() => sessionState.tradeMaster
-              ? html`<button type="button" class="inline-flex min-h-11 items-center rounded-control px-2 font-mono text-sm text-brand underline underline-offset-4" @click="${signOut}">Sign out</button>`
-              : ''}
           </div>
+
+          <nav class="-mx-4 flex w-full items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:w-auto sm:flex-1 sm:px-0" aria-label="Main">
+            ${PUBLIC.map(([to, label]) => Link({ to, children: label, class: navItem }))}
+            ${() => sessionState.tradeMaster ? html`<span class="mx-1 h-6 shrink-0 border-l border-line" aria-hidden="true"></span>${TRADE_MASTER.map(([to, label]) => Link({ to, children: label, class: navItem }))}
+              <button type="button" class="inline-flex min-h-11 shrink-0 items-center rounded-control px-3 font-mono text-sm text-brand underline underline-offset-4" @click="${signOut}">Sign out</button>` : ''}
+          </nav>
         </div>
       </header>
 
-      <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6">${content}</main>
+      <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6">${TradeMasterNotice()}${content}</main>
 
       <footer class="border-t border-line">
         <p class="mx-auto max-w-6xl px-4 py-4 font-mono text-xs text-fg-soft">Virtual money only. Not financial advice.</p>
