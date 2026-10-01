@@ -4,9 +4,19 @@ import { E2E_SESSION_TOKEN } from './fixtures.js'
 // The server is seeded with one week of the experiment (23 to 27 November 2026,
 // four trading days) on fake prices and recorded Trader answers.
 
-test.beforeEach(async ({ context, baseURL }) => {
+/** Content-Security-Policy complaints seen on the page during a test. */
+let blocked = /** @type {string[]} */ ([])
+
+test.beforeEach(async ({ context, baseURL, page }) => {
   await context.addCookies([{ name: 'mj_session', value: E2E_SESSION_TOKEN, url: baseURL, httpOnly: true, secure: true, sameSite: 'Strict' }])
+  blocked = []
+  page.on('console', (msg) => {
+    if (msg.text().includes('Content Security Policy')) blocked.push(msg.text())
+  })
 })
+
+// Every screen works under the server's Content-Security-Policy.
+test.afterEach(() => expect(blocked).toEqual([]))
 
 test('the Overview shows the value chart, standings and the latest recap', async ({ page }) => {
   await page.goto('/')
