@@ -37,7 +37,8 @@ db/                  # openDb(), migrate(), migrations/NNNN_name.sql
 core/                # plain domain functions: money (micro-dollars), market calendar; later the trading rules
 market/              # market data: Alpaca client, stock menu (stock-menu.json), store, briefing packs
 jobs/                # scheduler steps, e.g. floorRunner.js; each takes { db, ...clients, date } and is safe to re-run
-scripts/             # CLI tasks (Trade Master setup, run the Floor Runner by hand)
+scripts/             # CLI tasks (Trade Master setup, run the Floor Runner by hand, nightly backup)
+deploy/              # VPS setup, release switch and rollback; runbook in deploy/README.md
 tests/               # bun test: server, db, calendar, market data, jobs (fake Alpaca in tests/fake-alpaca.js)
 agents/              # arrives with the Traders milestone: model adapters and prompts
 ```
