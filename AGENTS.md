@@ -34,7 +34,7 @@ client/              # quiver fork: the single-page app
   tests/             # Vitest (framework/, composables/, state/, utils/) and Playwright (e2e/)
 server/              # Bun.serve: JSON API under /api, built client for everything else
 db/                  # openDb(), migrate(), migrations/NNNN_name.sql
-core/                # plain domain functions: money (micro-dollars), market calendar; later the trading rules
+core/                # trading rules as plain functions: money, calendar, portfolio, complianceDesk, openingBell, traders, books, metrics
 market/              # market data: Alpaca client, stock menu (stock-menu.json), store, briefing packs
 jobs/                # scheduler steps, e.g. floorRunner.js; each takes { db, ...clients, date } and is safe to re-run
 scripts/             # CLI tasks (Trade Master setup, run the Floor Runner by hand, nightly backup)
@@ -76,6 +76,7 @@ Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA
 - Nothing is ever deleted: history screens read stored rows. Briefing packs are immutable once built.
 - The Index is a `traders` row of kind `benchmark`, so every chart and standing treats it like the others.
 - Market data: daily bars are stored **unadjusted** (raw official prices, used for fills); splits live in `corporate_actions` and are applied when comparing prices across dates. Alpaca is used for market data and its calendar only: **no code sends orders to any broker.**
+- Trading engine (`core/`): the Compliance Desk checks orders at the decision day's close and queues them for the next trading day; the Opening Bell fills them at that day's official open (splits, then dividends, then sells, then buys scaled to fit, then The Index spends its cash on SPY), all in one transaction and safe to re-run. `cash_ledger` is the only record of cash (cash = its sum); splits are ledger rows of amount 0 so `core/books.js` can replay positions from fills and check the running totals. `closeOfDay()` writes snapshots and metrics for a date from replayed positions, so a past day can be rebuilt.
 - Briefing packs are JSON documents for models: prices in dollars (rounded to cents) in a compact `columns`/`rows` table, headlines fenced as untrusted data. About 16k tokens for the full menu.
 
 ## Server conventions
