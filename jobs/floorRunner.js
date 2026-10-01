@@ -10,7 +10,7 @@ import defaultMenu from '../market/stock-menu.json'
 /** @typedef {import('../market/alpaca.js').Alpaca} Alpaca */
 /** @typedef {import('../market/store.js').StockMenu} StockMenu */
 
-const CALENDAR_END = '2029-12-31'
+export const CALENDAR_END = '2029-12-31'
 const HISTORY_TRADING_DAYS = 63 // the 3-month change
 const CORPORATE_ACTIONS_AHEAD_DAYS = 45
 const NEWS_MAX = 1000

@@ -16,8 +16,10 @@ export const INDEX_TICKER = 'SPY'
  * @property {number | null} [modelId]
  * @property {'daily' | 'weekly'} cadence
  * @property {number | null} [colourSlot]
- * @property {string} startedOn the trading date its cash arrives: for a Trader, the evening of its
- *   first decision; for The Index, the open after it (day one), when it buys SPY
+ * @property {string | null} startedOn the trading date it joins: for a Trader, the evening of its
+ *   first decision; for The Index, the open after it (day one), when it buys SPY. null while the
+ *   experiment is being set up (Start the experiment sets it).
+ * @property {string} [asOf] the date its cash and rules take effect (default: startedOn)
  * @property {number} cashMicro starting cash
  * @property {Partial<import('./portfolio.js').Rules>} [rules]
  * @property {Date} now
@@ -29,14 +31,15 @@ export const INDEX_TICKER = 'SPY'
  * @param {NewTrader} t
  * @returns {number} the Trader's id
  */
-export function createTrader(db, { name, kind = 'ai', modelId = null, cadence, colourSlot = null, startedOn, cashMicro, rules = {}, now }) {
+export function createTrader(db, { name, kind = 'ai', modelId = null, cadence, colourSlot = null, startedOn, asOf = startedOn ?? undefined, cashMicro, rules = {}, now }) {
+  if (!asOf) throw new Error('A Trader needs a date for its starting cash.')
   return db.transaction(() => {
     const { id } = /** @type {{ id: number }} */ (
       db.query(`INSERT INTO traders (name, kind, model_id, cadence, colour_slot, started_on) VALUES (?, ?, ?, ?, ?, ?) RETURNING id`)
         .get(name, kind, modelId, cadence, colourSlot, startedOn)
     )
-    db.run('INSERT INTO rule_sets (trader_id, rules, effective_from) VALUES (?, ?, ?)', [id, JSON.stringify({ ...DEFAULT_RULES, ...rules }), startedOn])
-    db.run("INSERT INTO cash_ledger (trader_id, kind, amount_micro, trading_date, note, created_at) VALUES (?, 'start', ?, ?, 'Starting cash', ?)", [id, cashMicro, startedOn, now.toISOString()])
+    db.run('INSERT INTO rule_sets (trader_id, rules, effective_from) VALUES (?, ?, ?)', [id, JSON.stringify({ ...DEFAULT_RULES, ...rules }), asOf])
+    db.run("INSERT INTO cash_ledger (trader_id, kind, amount_micro, trading_date, note, created_at) VALUES (?, 'start', ?, ?, 'Starting cash', ?)", [id, cashMicro, asOf, now.toISOString()])
     return id
   })()
 }
