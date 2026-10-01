@@ -1,0 +1,35 @@
+# Dependencies
+node_modules/
+
+# Build output
+dist/
+
+# VitePress build & cache
+docs/.vitepress/dist/
+docs/.vitepress/cache/
+
+# Playwright
+test-results/
+playwright-report/
+
+# Env files
+.env
+.env.local
+.env.*.local
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
+
+# Claude Code worktrees
+.claude/worktrees/
+
+# SQLite database files (the experiment's data lives on the server, never in git)
+data/
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal

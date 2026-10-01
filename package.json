@@ -1,0 +1,35 @@
+{
+  "name": "market-jury",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "engines": {
+    "bun": ">=1.3"
+  },
+  "scripts": {
+    "dev": "bun --watch server/index.js",
+    "dev:client": "vite",
+    "start": "bun server/index.js",
+    "build": "vite build",
+    "migrate": "bun db/migrate.js",
+    "trade-master:setup": "bun scripts/setup-trade-master.js",
+    "test": "bun test && vitest run",
+    "test:server": "bun test",
+    "test:client": "vitest run",
+    "test:e2e": "playwright test",
+    "typecheck": "tsc --project jsconfig.json && tsc --project client/jsconfig.json"
+  },
+  "dependencies": {
+    "@arrow-js/core": "^1.0.6"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@tailwindcss/vite": "^4.3.3",
+    "@types/bun": "^1.4.2",
+    "jsdom": "^29.1.0",
+    "tailwindcss": "^4.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.1",
+    "vitest": "^5.0.2"
+  }
+}

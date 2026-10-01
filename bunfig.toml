@@ -1,0 +1,9 @@
+[run]
+# Run package.json scripts and the tools they call (vite, vitest) on Bun
+# instead of Node. Scripts stay plain, so `npm run` still works.
+bun = true
+
+[test]
+# bun test covers server/, db/ and the trading logic. The client keeps
+# quiver's Vitest suite under client/tests, so keep bun test out of it.
+root = "tests"
