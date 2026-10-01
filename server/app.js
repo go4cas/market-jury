@@ -4,6 +4,7 @@ import { adminRoutes } from './admin.js'
 import { authRoutes, isTradeMaster } from './auth.js'
 import { config } from './config.js'
 import { json, error, withSecurityHeaders } from './http.js'
+import { readRoutes } from './reads.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 
@@ -35,6 +36,7 @@ export function startServer({ db, port, clientDir, now, steps }) {
 
       ...authRoutes(db, { now }),
       ...adminRoutes(context),
+      ...readRoutes(context),
 
       '/api/*': () => error(404, 'There is nothing at this address.'),
     },

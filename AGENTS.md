@@ -88,6 +88,7 @@ Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA
 - Login: `Bun.password` (argon2id) + TOTP code (`server/totp.js`), one-time codes, 5 wrong tries lock it for 15 minutes, session cookie `mj_session` is httpOnly, Secure, SameSite=Strict, stored only as a SHA-256 hash.
 - Model output is data: parse it against a schema, never execute it. Lookup tools for models are read-only and capped.
 - Admin routes live in `server/admin.js`; every one, reads included, needs the Trade Master. The scheduler (`jobs/schedule.js`) runs inside the server process once a minute and is the only thing that runs steps; the API only starts, pauses, rehearses or re-runs. A step is one `step_runs` row per (step, trading date): add a step by adding to `STEPS` with its due time and `after` steps.
+- Gallery reads live in `server/reads.js` (`/api/overview`, `/api/series`, `/api/standings`, `/api/days/:date`, `/api/history`, `/api/traders/:id`, `/api/columnist`): open while the Gallery is on, always to the Trade Master. Money stays in micro-dollars in JSON; the client converts. Standings and badges are `core/standings.js`; a week's and a month's badges are stored at their last close (the floor-runner step), so finished periods keep theirs.
 - Model calls (`agents/`): every attempt is a `runs` row with the exact prompt, raw response, tokens and cost (`agents/call.js`). Effort uses the AI SDK's portable `reasoning` setting. The shared instructions and briefing pack come first (Anthropic cache breakpoint after the pack); the Trader's own portfolio, last 10 decisions and journal come last. Tests use `tests/mock-model.js` with recorded answers in `tests/recorded/`.
 
 ---
@@ -103,13 +104,15 @@ These are non-obvious constraints. Violating them causes silent bugs or runtime 
 3. **`.disabled` is not the DOM disabled property.** Use `aria-disabled="true/false"` plus CSS (`opacity-50 cursor-not-allowed`).
 4. **Use `.key()` on components in loops**: `` html`${() => items.map(i => Card({ i }).key(i.id))}` ``.
 5. **Keep primitives in reactive state, not Dates or class instances.** `reactive()` proxies objects, and a proxied `Date` throws in `Intl` ("Invalid time value"). Store `Date.now()` and wrap with `new Date()` when formatting.
+6. **A reactive slot that returns the same markup with new values can leave stale values on screen.** arrow-js patches it in place and nested lists may not update. Return `fresh(key, template)` (from `components/Loadable.js`) so a new key replaces it outright; `Loadable()` already does this per answer. Don't nest a `Loadable` inside `fresh`: show and hide with a reactive `class` instead.
+7. **No buttons inside a `<label>`** (for example a glossary `Term`): the label then names the button, not the input.
 
 ### Pages, layouts, guards
 
 - File `client/src/pages/path.js` → route `/path`; `[param].js` is a dynamic segment (read with `useRoute().params()`); `not-found.js` handles 404. Export `meta = { layout: 'app' | 'basic', title }` and call `useMeta({ title })`.
 - Layout `'app'`: the shared top bar (logo mark, name, nav, TRADE MASTER pill, Terminal/Daylight toggle) and the "Virtual money only. Not financial advice." footer. Layout `'basic'`: a centred panel (login, not found).
 - Access rules are one pure function, `routeGuard()` in `client/src/state/sessionState.js`, registered in `main.js`: `/admin/*` is Trade Master only; everything else needs the Gallery open or the Trade Master. The server enforces the same rules; the client guard is only for navigation.
-- Composables: `useFetch` for API calls (do not hand-roll fetch + loading state), `useForm` for forms, `useToast` for notifications, `useRoute`/`useRouter` for navigation. Call them inside page/component functions.
+- Composables: `useFetch` for API calls (do not hand-roll fetch + loading state), `useApi(() => url)` when the address follows reactive state (it refetches on change and keeps the server's plain-language error), `send()` in `utils/api.js` for writes, `useForm` for forms, `useToast` for notifications, `useRoute`/`useRouter` for navigation. Call them inside page/component functions.
 - State modules: module-scope `reactive({...})` singletons in `client/src/state/`.
 - Import components directly from their files (no barrel).
 
@@ -120,6 +123,7 @@ These are non-obvious constraints. Violating them causes silent bugs or runtime 
 - Fonts: IBM Plex Sans for headings and reading text, IBM Plex Mono for every number, ticker, button label and `prompt` eyebrow (use the `prompt` utility; add `prompt-caret` for the steel-blue `> `).
 - Steel blue (`brand`) is the only accent: primary buttons, active nav, focus ring, glossary underline. It never marks gains, losses or a Trader. `good`/`bad` only colour numbers and always come with ▲/▼ and a sign. BUY/SELL tags are never green or red. Each Trader keeps its colour for life (Claude trader-1, GPT trader-2, Gemini trader-3, DeepSeek trader-4); The Index is grey and dashed.
 - Write for someone new to trading: plain sentences first, the trading term after it as a glossary term. Name the cast by persona ("The Floor Runner couldn't build the briefing pack"), not by system part. Quote Traders' reasons verbatim. Sentence case, no emoji, no exclamation marks. No "AI" wordmark or badge on the logo.
+- Screens show data through `Loadable(request, view)`; glossary words through `Term(word, key)` (`utils/glossary.js`); Traders through `TraderMark`/`TraderName`; changes through `Delta` (arrow plus sign); value lines through `ValueChart` (uPlot).
 - Phone first: one column, 16px gutters, touch targets at least 44px (`min-h-11`). Respect `prefers-reduced-motion`; nothing blinks or auto-scrolls.
 
 ---

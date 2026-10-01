@@ -1,0 +1,121 @@
+import { test, expect } from '@playwright/test'
+import { E2E_SESSION_TOKEN } from './fixtures.js'
+
+// The server is seeded with one week of the experiment (23 to 27 November 2026,
+// four trading days) on fake prices and recorded Trader answers.
+
+test.beforeEach(async ({ context, baseURL }) => {
+  await context.addCookies([{ name: 'mj_session', value: E2E_SESSION_TOKEN, url: baseURL, httpOnly: true, secure: true, sameSite: 'Strict' }])
+})
+
+test('the Overview shows the value chart, standings and the latest recap', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByTestId('dateline')).toContainText('Day 3')
+  await expect(page.getByRole('img', { name: /Daily track since day one: Claude · Daily \$1,0\d\d/ })).toBeVisible()
+  await expect(page.getByRole('table').getByText('Claude · Daily')).toBeVisible()
+  await expect(page.getByText('The Columnist · Daily recap · Fri 27 Nov')).toBeVisible()
+
+  // The weekly track swaps the chart and the table.
+  await page.getByRole('button', { name: 'Weekly', exact: true }).click()
+  await expect(page.getByRole('table').getByText('Claude · Weekly')).toBeVisible()
+  await expect(page.getByRole('table').getByText('Claude · Daily')).toHaveCount(0)
+})
+
+test('a glossary word opens its plain-language definition', async ({ page }) => {
+  await page.goto('/')
+  const term = page.getByRole('button', { name: 'portfolio' })
+  await term.click()
+  await expect(term).toHaveAttribute('aria-expanded', 'true')
+  await expect(page.getByRole('note').filter({ hasText: 'Everything a Trader owns' })).toBeVisible()
+})
+
+test('Standings rank a week with its badges', async ({ page }) => {
+  await page.goto('/standings')
+  await expect(page.getByRole('heading', { name: 'Week of 23–27 Nov' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: 'Worst drop' })).toBeVisible()
+  await expect(page.getByRole('list', { name: 'Badges' })).toBeVisible()
+  await page.getByRole('button', { name: 'Since start' }).click()
+  await expect(page.getByRole('heading', { name: 'Since the start, to Fri 27 Nov' })).toBeVisible()
+})
+
+test('Yesterday shows each Trader\'s orders with its reason, and steps back a day', async ({ page }) => {
+  await page.goto('/yesterday')
+  await expect(page.getByRole('heading', { name: 'Yesterday', level: 1 })).toBeVisible()
+  await expect(page.getByTestId('trade-card')).toHaveCount(8)
+  await expect(page.getByText('“Steady gains and a new phone launch; a core holding.”').first()).toBeVisible()
+  await expect(page.getByText(/by the Compliance Desk/).first()).toBeVisible()
+
+  await page.getByRole('link', { name: 'Previous trading day' }).click()
+  await expect(page).toHaveURL('/days/2026-11-25')
+  await expect(page.getByRole('heading', { name: 'Wed 25 Nov', level: 1 })).toBeVisible()
+  await expect(page.getByTestId('trade-card')).toHaveCount(4)
+
+  await page.getByRole('button', { name: 'GPT' }).click()
+  await expect(page.getByTestId('trade-card')).toHaveCount(1)
+})
+
+test('History opens a day from a week card', async ({ page }) => {
+  await page.goto('/history')
+  await expect(page.getByTestId('week-card')).toHaveCount(1)
+  await expect(page.getByText('Week 1 · 23–27 Nov')).toBeVisible()
+  await page.getByRole('link', { name: /^Tue 24 Nov: \d+ trades$/ }).click()
+  await expect(page).toHaveURL('/days/2026-11-24')
+})
+
+test('a Trader\'s page shows holdings, trades and its journal; Compare puts two side by side', async ({ page }) => {
+  await page.goto('/standings')
+  await page.getByRole('link', { name: 'Claude · Daily' }).click()
+  await expect(page.getByRole('heading', { name: 'Claude · Daily', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'What it holds' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'AAPL' })).toBeVisible()
+  await expect(page.getByText('Day one. Bought AAPL and SPY').first()).toBeVisible()
+
+  await page.goto('/compare')
+  await expect(page.getByRole('columnheader', { name: 'Claude · Weekly' })).toBeVisible()
+  await expect(page.getByRole('rowheader', { name: 'Since start' })).toBeVisible()
+})
+
+test('the Columnist lists recaps and the weekly report', async ({ page }) => {
+  await page.goto('/columnist')
+  await expect(page.getByTestId('column')).toHaveCount(5)
+  await page.getByRole('button', { name: 'Weekly reports' }).click()
+  await expect(page.getByTestId('column')).toHaveCount(1)
+})
+
+test('the Trade Master screens: settings, costs and the briefing pack', async ({ page }) => {
+  await page.goto('/admin/settings')
+  await expect(page.getByTestId('experiment-state')).toHaveText('Running')
+  await expect(page.getByRole('button', { name: 'Retire' })).toHaveCount(8)
+  await page.getByRole('searchbox', { name: /Find a ticker/ }).fill('nv')
+  await expect(page.getByText('Nvidia')).toBeVisible()
+  await expect(page.getByText('Apple Inc.')).toHaveCount(0)
+
+  await page.goto('/admin/costs')
+  await expect(page.getByRole('heading', { name: 'By Trader' })).toBeVisible()
+
+  await page.goto('/admin/briefing')
+  await expect(page.getByRole('heading', { name: 'Headlines' })).toBeVisible()
+  await expect(page.getByRole('cell', { name: 'SPY', exact: true })).toBeVisible()
+})
+
+test('a visitor reads the Gallery once the Trade Master opens it, but not the Trade Master screens', async ({ page, browser, baseURL }) => {
+  await page.goto('/admin/settings')
+  await page.getByRole('checkbox', { name: /Open the Gallery/ }).check()
+  await page.getByRole('button', { name: 'Save settings' }).click()
+  await expect(page.getByText('Settings saved.')).toBeVisible()
+
+  const visitor = await browser.newPage({ baseURL })
+  await visitor.goto('/yesterday')
+  await expect(visitor.getByTestId('trade-card').first()).toBeVisible()
+  await expect(visitor.getByText('TRADE MASTER')).toHaveCount(0)
+  await expect(visitor.getByRole('link', { name: 'Settings' })).toHaveCount(0)
+  await visitor.goto('/admin/costs')
+  await expect(visitor).toHaveURL('/login')
+  await visitor.close()
+
+  // Close it again for the other tests.
+  await page.reload()
+  await page.getByRole('checkbox', { name: /Open the Gallery/ }).uncheck()
+  await page.getByRole('button', { name: 'Save settings' }).click()
+  await expect(page.getByText('Settings saved.')).toBeVisible()
+})

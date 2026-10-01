@@ -6,6 +6,7 @@
 import { closeInstant, isLastTradingDayOfWeek, marketDate, openInstant, tradingDaysBetween } from '../core/calendar.js'
 import { checkBooks } from '../core/books.js'
 import { closeOfDay } from '../core/metrics.js'
+import { awardBadgesAtClose } from '../core/standings.js'
 import { ringOpeningBell } from '../core/openingBell.js'
 import { budget, mayRun } from '../agents/budget.js'
 import { writeColumn } from '../agents/columnist.js'
@@ -123,6 +124,7 @@ export const STEPS = /** @type {Step[]} */ ([
       const r = await runFloorRunner({ db, alpaca, date, menu, now })
       if (r.skipped) return r.skipped
       closeOfDay(db, date)
+      awardBadgesAtClose(db, date)
       const problems = checkBooks(db)
       return problems.length ? `The books don't balance: ${problems.join(' ')}` : null
     },
