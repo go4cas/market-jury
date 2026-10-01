@@ -111,6 +111,10 @@ S3_ACCESS_KEY_ID=
 S3_SECRET_ACCESS_KEY=
 S3_ENDPOINT=
 S3_BUCKET=
+
+# Alpaca market data for the Floor Runner (see deploy/README.md)
+ALPACA_KEY_ID=
+ALPACA_SECRET_KEY=
 EOF
 fi
 chown root:"$APP_USER" "$ENV_FILE"

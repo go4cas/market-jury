@@ -82,6 +82,19 @@ Run the Deploy workflow from the Actions tab (or merge to `main`). Then, on the 
 mj run trade-master:setup
 ```
 
+### 7. Market data
+
+In Alpaca (paper trading account), open "API Keys" and generate a key. On the server,
+`sudo nano /etc/market-jury/env` and fill in `ALPACA_KEY_ID` and `ALPACA_SECRET_KEY`, then
+`sudo systemctl restart market-jury`. Check it with a real run for the last trading day:
+
+```sh
+mj run floor-runner
+```
+
+It should end with "Briefing pack for ... is ready". Alpaca is used for market data only; the
+app never sends it orders.
+
 ## Everyday
 
 | To | Run on the server |

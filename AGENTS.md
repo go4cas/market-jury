@@ -34,10 +34,13 @@ client/              # quiver fork: the single-page app
   tests/             # Vitest (framework/, composables/, state/, utils/) and Playwright (e2e/)
 server/              # Bun.serve: JSON API under /api, built client for everything else
 db/                  # openDb(), migrate(), migrations/NNNN_name.sql
-scripts/             # CLI tasks (Trade Master setup, nightly backup)
+core/                # plain domain functions: money (micro-dollars), market calendar; later the trading rules
+market/              # market data: Alpaca client, stock menu (stock-menu.json), store, briefing packs
+jobs/                # scheduler steps, e.g. floorRunner.js; each takes { db, ...clients, date } and is safe to re-run
+scripts/             # CLI tasks (Trade Master setup, run the Floor Runner by hand, nightly backup)
 deploy/              # VPS setup, release switch and rollback; runbook in deploy/README.md
-tests/               # bun test: server, db and (later) trading logic
-core/  agents/  jobs/   # arrive with later milestones: trading rules, model adapters, scheduler steps
+tests/               # bun test: server, db, calendar, market data, jobs (fake Alpaca in tests/fake-alpaca.js)
+agents/              # arrives with the Traders milestone: model adapters and prompts
 ```
 
 Layers, bottom up: SQLite → `db/` → domain (`core/`, `agents/`, `jobs/`) → JSON API (`server/`) → client. The scheduler calls the domain directly, so the API and the scheduler share one set of rules. Trading logic is plain functions that take a database handle; it never imports from `server/`.
@@ -52,6 +55,7 @@ bun run build               # build the client into dist/
 bun run start               # production: serve API + dist/, run migrations on start
 bun run migrate             # apply pending migrations
 bun run trade-master:setup  # create/reset the Trade Master password + authenticator code
+bun run floor-runner [date] # collect prices/headlines and build the briefing pack for a day (needs Alpaca keys)
 bun run typecheck           # tsc over server/db/scripts/tests, then client/
 bun run test                # bun test (server) + vitest (client)
 bun run test:e2e            # Playwright: real Bun server, throwaway DB, built client
@@ -59,7 +63,7 @@ bun run test:e2e            # Playwright: real Bun server, throwaway DB, built c
 
 **Always run `bun run typecheck && bun run test && bun run test:e2e` before completing a task.** CI runs the same three plus the build. In a sandbox with a preinstalled Chromium, set `PLAYWRIGHT_CHROMIUM_PATH` (e.g. `/opt/pw-browsers/chromium`) instead of downloading browsers.
 
-Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`. API keys go in the server's environment file only, never in the repo or the browser.
+Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA_KEY_ID`, `ALPACA_SECRET_KEY`. API keys go in the server's environment file only, never in the repo or the browser.
 
 ---
 
@@ -71,6 +75,8 @@ Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`. API key
 - "Built to grow": `asset_class`, `market`, `currency`, `calendar`, `direction`, `order_type` and per-Trader `rule_sets` stay open TEXT/JSON so shorts, crypto or limit orders need no migration. Behaviour metrics are rows in `metrics` (new metric = new key).
 - Nothing is ever deleted: history screens read stored rows. Briefing packs are immutable once built.
 - The Index is a `traders` row of kind `benchmark`, so every chart and standing treats it like the others.
+- Market data: daily bars are stored **unadjusted** (raw official prices, used for fills); splits live in `corporate_actions` and are applied when comparing prices across dates. Alpaca is used for market data and its calendar only: **no code sends orders to any broker.**
+- Briefing packs are JSON documents for models: prices in dollars (rounded to cents) in a compact `columns`/`rows` table, headlines fenced as untrusted data. About 16k tokens for the full menu.
 
 ## Server conventions
 

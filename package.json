@@ -13,6 +13,7 @@
     "build": "vite build",
     "migrate": "bun db/migrate.js",
     "trade-master:setup": "bun scripts/setup-trade-master.js",
+    "floor-runner": "bun scripts/floor-runner.js",
     "test": "bun test && vitest run",
     "test:server": "bun test",
     "test:client": "vitest run",
