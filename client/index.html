@@ -1,0 +1,31 @@
+<!doctype html>
+<html lang="en" data-theme="market-jury" data-mode="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <title>Market Jury</title>
+    <meta name="description" content="Four AI traders, one market, and you are the jury. A paper-trading experiment with virtual money." />
+    <script>
+      // Terminal (dark) unless the viewer picked Daylight. Applied before first paint to avoid a flash.
+      try {
+        if (localStorage.getItem('ui-mode') === 'light') document.documentElement.dataset.mode = 'light'
+      } catch (e) { /* storage blocked: Terminal applies */ }
+    </script>
+  </head>
+  <body class="bg-surface text-fg antialiased">
+    <div id="app"></div>
+    <noscript>Market Jury needs JavaScript.</noscript>
+    <script>
+      // Quiver's router runs on the Navigation API (Chrome and Edge 102+, Safari 26.2+, Firefox 147+).
+      if (!('navigation' in window)) {
+        document.getElementById('app').innerHTML =
+          '<p style="max-width:32rem;margin:4rem auto;padding:0 1rem;font-family:sans-serif;line-height:1.5">' +
+          'Market Jury needs a newer browser. Please update to a current version of Chrome, Edge, Safari or Firefox.</p>'
+      }
+    </script>
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>

@@ -1,0 +1,177 @@
+@import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600;700&family=IBM+Plex+Sans:wght@400;500;600;700&display=swap');
+@import "tailwindcss";
+
+/* Dark mode (Terminal) is driven by the data-mode attribute on <html>. */
+@variant dark (&:where([data-mode=dark], [data-mode=dark] *));
+
+/* Quiver's base tokens. The Market Jury theme below overrides them; these stay
+   as the fallback quiver's contract expects. */
+@theme {
+  --color-brand:       #356A99;
+  --color-brand-hover: #2B5A84;
+  --color-brand-tint:  rgba(53, 106, 153, 0.12);
+  --color-surface:         #F6F8FA;
+  --color-surface-raised:  #FFFFFF;
+  --color-surface-inset:   #EEF1F4;
+  --color-fg:       #1F2328;
+  --color-fg-soft:  #59636E;
+  --color-fg-faint: #6E7781;
+  --color-line:        #D0D7DE;
+  --color-line-strong: #6E7781;
+  --radius-control: 4px;
+  --radius-panel:   6px;
+  --shadow-panel: 0 1px 2px rgb(31 35 40 / 0.06);
+  --shadow-float: 0 8px 24px rgb(31 35 40 / 0.16);
+  --font-display: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-ui:      "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+
+  --animate-toast-in:  toast-in  0.2s ease-out;
+  --animate-toast-out: toast-out 0.2s ease-in forwards;
+}
+
+@keyframes toast-in {
+  from { opacity: 0; transform: translateY(0.5rem); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes toast-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(0.5rem); }
+}
+
+/* ═══════════════════════════════════════════════════
+   MARKET JURY: "Night Terminal" (design/market-jury-theme.css, copied verbatim)
+═══════════════════════════════════════════════════ */
+/* Market Jury theme for quiver (Tailwind v4): "Night Terminal", chosen by Cas on 1 October 2026.
+   Source of truth: Market Jury Design System, https://claude.ai/artifact/7bJEKRZ9vgGYtXTqq5t6QH
+   Follows quiver's contract: [data-theme="market-jury"] = Daylight (light), plus [data-mode="dark"] = Terminal.
+   Terminal is the default look: set data-mode="dark" on <html> unless the viewer picked light.
+   Paste into src/style.css after quiver's @theme block and register "market-jury" in THEMES. */
+
+@theme {
+  /* Light (Daylight) defaults for the new tokens; dark values below. */
+  --color-trader-1: #C2410C;   /* Claude */
+  --color-trader-2: #0F766E;   /* GPT */
+  --color-trader-3: #8F6A00;   /* Gemini */
+  --color-trader-4: #7E22CE;   /* DeepSeek */
+  --color-trader-5: #1D4ED8;   /* spares, used in order for new providers */
+  --color-trader-6: #A8325E;
+  --color-trader-7: #4D6B2E;
+  --color-trader-8: #7A4B2A;
+  --color-trader-9: #24427A;
+  --color-trader-10: #8C2D8C;
+  --color-trader-11: #6B6200;
+  --color-trader-12: #0B6680;
+  --color-index: #6E7781;      /* The Index (SPY): always dashed [6, 5] */
+  --color-good: #1A7F37;       /* gains: always with ▲ and + */
+  --color-bad: #CF222E;        /* losses: always with ▼ and − */
+  --color-warn: #9A6700;       /* banner border and icon */
+  --color-warn-wash: #FFF4D6;  /* banner ground */
+  --color-on-brand: #FFFFFF;   /* text on bg-brand */
+  --color-highlighter: rgba(53, 106, 153, 0.16); /* glossary-term wash, with a dotted brand underline */
+  --color-chart-grid: #E4E8EC;
+  --font-mono: "IBM Plex Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+}
+
+[data-theme="market-jury"] {
+  --color-brand: #356A99;
+  --color-brand-hover: #2B5A84;
+  --color-brand-tint: rgba(53, 106, 153, 0.12);
+  --color-surface: #F6F8FA;
+  --color-surface-raised: #FFFFFF;
+  --color-surface-inset: #EEF1F4;
+  --color-fg: #1F2328;
+  --color-fg-soft: #59636E;
+  --color-fg-faint: #6E7781;
+  --color-line: #D0D7DE;
+  --color-line-strong: #6E7781;
+  --radius-control: 4px;
+  --radius-panel: 6px;
+  --shadow-panel: 0 1px 2px rgb(31 35 40 / 0.06);
+  --shadow-float: 0 8px 24px rgb(31 35 40 / 0.16);
+  --font-display: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+  --font-ui: "IBM Plex Sans", "Helvetica Neue", Arial, sans-serif;
+}
+
+[data-theme="market-jury"][data-mode="dark"] {
+  --color-brand: #7BA7D7;                      /* steel blue */
+  --color-brand-hover: #9BBEE3;
+  --color-brand-tint: rgba(123, 167, 215, 0.16);
+  --color-on-brand: #0D1117;
+  --color-surface: #0D1117;
+  --color-surface-raised: #151B23;
+  --color-surface-inset: #090C10;
+  --color-fg: #E6EDF3;
+  --color-fg-soft: #8B98A5;
+  --color-fg-faint: #6B7785;
+  --color-line: #2A3340;
+  --color-line-strong: #5B6878;
+  --shadow-panel: none;
+  --shadow-float: 0 12px 32px rgb(0 0 0 / 0.6);
+  --color-trader-1: #FF8A5B;
+  --color-trader-2: #3DD6B5;
+  --color-trader-3: #E3C14B;
+  --color-trader-4: #C29BFF;
+  --color-trader-5: #6EA8FF;
+  --color-trader-6: #FF7FB0;
+  --color-trader-7: #A3D977;
+  --color-trader-8: #D9A57B;
+  --color-trader-9: #9DB8FF;
+  --color-trader-10: #F08AF0;
+  --color-trader-11: #D4D46A;
+  --color-trader-12: #5CD0F0;
+  --color-index: #8B98A5;
+  --color-good: #4ADE80;
+  --color-bad: #F87171;
+  --color-warn: #F5A524;
+  --color-warn-wash: #2A1F0A;
+  --color-highlighter: rgba(123, 167, 215, 0.22);
+  --color-chart-grid: #1C2430;
+}
+
+/* Focus ring: 2px solid var(--color-brand), 2px offset.
+   Fonts: IBM Plex Sans 400/500/600/700 and IBM Plex Mono 400/500/600/700 (Google Fonts or self-hosted).
+
+   uPlot series (read values with getComputedStyle at draw time; redraw when data-mode changes):
+   Trader      stroke: var(--color-trader-N)  width: 2.5  dash: none
+   The Index   stroke: var(--color-index)     width: 2    dash: [6, 5]
+   Weekly track of a model, Compare view only: its trader stroke, width 2, dash [2, 4], round caps
+   Axes stroke: --color-fg-soft; grid stroke: --color-chart-grid width 1; font 12px var(--font-mono); y-axis side 1 (right).
+   No fill under lines; points off except a 4px end dot; cursor line --color-line-strong. */
+
+/* ═══════════════════════════════════════════════════
+   Base styles
+═══════════════════════════════════════════════════ */
+:root {
+  font-family: var(--font-ui);
+  background: var(--color-surface);
+  color: var(--color-fg);
+}
+
+/* Every number lines up in columns. */
+.font-mono { font-variant-numeric: tabular-nums; }
+
+/* A `prompt` eyebrow: uppercase mono label, optionally led by a steel-blue "> ". */
+@utility prompt {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  line-height: 16px;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--color-fg-soft);
+}
+.prompt-caret::before { content: "> "; color: var(--color-brand); }
+
+*:focus-visible {
+  outline: 2px solid var(--color-brand);
+  outline-offset: 2px;
+}
+
+button, a, input {
+  transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; }
+}
