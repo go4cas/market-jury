@@ -94,3 +94,27 @@ describe('Badges', () => {
     expect(db.query('SELECT COUNT(*) AS n FROM badges').get()).toEqual({ n: 0 })
   })
 })
+
+describe('Standings against The Index', () => {
+  test('a late joiner is compared with The Index over its own dates, as the metrics do', () => {
+    const fresh = tradingDb()
+    const index = anIndex(fresh, { startedOn: TUE })
+    setPrices(fresh, MON, { SPY: 600 })
+    setPrices(fresh, TUE, { SPY: 625 })
+    ringOpeningBell(fresh, { date: TUE, now: NOW })
+    setPrices(fresh, WED, { SPY: 660 })
+    closeOfDay(fresh, TUE)
+    closeOfDay(fresh, WED)
+    const late = aTrader(fresh, { name: 'Late daily', startedOn: THU })
+    setPrices(fresh, THU, { SPY: 693 })
+    closeOfDay(fresh, THU)
+
+    for (const kind of /** @type {const} */ (['all', 'week'])) {
+      const rows = standings(fresh, { track: 'daily', kind, end: THU })
+      expect(rows.find((r) => r.traderId === index)).toMatchObject({ returnPct: 10.88, vsIndexPct: 0 })
+      expect(rows.find((r) => r.traderId === late)).toMatchObject({ returnPct: 0, vsIndexPct: -5 })
+    }
+    // A single day: the same close before it for both.
+    expect(standings(fresh, { track: 'daily', kind: 'day', end: THU }).find((r) => r.traderId === late)).toMatchObject({ returnPct: 0, vsIndexPct: -5 })
+  })
+})

@@ -40,7 +40,7 @@ export function periodStart(db, kind, end) {
  * @property {string} status
  * @property {number} totalMicro value at the period's last close
  * @property {number} returnPct over the period
- * @property {number | null} vsIndexPct the period's return less The Index's
+ * @property {number | null} vsIndexPct the period's return less The Index's over the same dates
  * @property {number} sinceStartPct
  * @property {number} maxDrawdownPct the worst fall from a high within the period
  * @property {number} cashSharePct at the period's last close
@@ -56,6 +56,7 @@ export function periodStart(db, kind, end) {
  * @property {'daily' | 'weekly'} cadence
  * @property {number | null} colour_slot
  * @property {string} status
+ * @property {string} started_on
  */
 
 /**
@@ -92,6 +93,9 @@ function periodFigures(db, t, start, end) {
       WHERE c.trader_id = ? AND c.trading_date BETWEEN ? AND ? AND c.key = 'losers_cut'`).get(t.id, from, end))
 
   return {
+    // The close the return is measured from: the one before the period, or
+    // null when there is none (the Trader started within it).
+    baseDate: baseRow ? before : null,
     totalMicro: endRow.total_micro,
     returnPct: base ? round2((endRow.total_micro / base - 1) * 100) : 0,
     sinceStartPct: metricAt('return_pct'),
@@ -111,7 +115,28 @@ function periodFigures(db, t, start, end) {
  * @returns {TraderRow[]}
  */
 const tradersWhere = (db, where, params) =>
-  /** @type {TraderRow[]} */ (db.query(`SELECT id, name, kind, cadence, colour_slot, status FROM traders t WHERE ${where} ORDER BY id`).all(.../** @type {any[]} */ (params)))
+  /** @type {TraderRow[]} */ (db.query(`SELECT id, name, kind, cadence, colour_slot, status, started_on FROM traders t WHERE ${where} ORDER BY id`).all(.../** @type {any[]} */ (params)))
+
+/**
+ * The Index's return over the same dates as one Trader's, as indexReturn() in
+ * metrics.js does it: from the close the Trader's return starts at, or, for a
+ * Trader that started within the period, from The Index's close before its first
+ * day (its starting cash if the Trader started no later than The Index).
+ * @param {Database} db
+ * @param {{ t: TraderRow, f: NonNullable<ReturnType<typeof periodFigures>> }} index
+ * @param {TraderRow} t
+ * @param {string | null} baseDate
+ * @returns {number | null}
+ */
+function indexReturnFor(db, index, t, baseDate) {
+  const totalOn = (/** @type {string | null} */ d) =>
+    d === null ? null : (/** @type {{ total_micro: number } | null} */ (db.query('SELECT total_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?').get(index.t.id, d))?.total_micro ?? null)
+  const startCash = () => /** @type {{ v: number }} */ (db.query("SELECT COALESCE(SUM(amount_micro), 0) AS v FROM cash_ledger WHERE trader_id = ? AND kind = 'start'").get(index.t.id)).v
+  const base = baseDate !== null ? totalOn(baseDate) ?? startCash()
+    : t.started_on <= index.t.started_on ? startCash()
+    : totalOn(previousTradingDay(db, t.started_on))
+  return base ? round2((index.f.totalMicro / base - 1) * 100) : null
+}
 
 /**
  * The standings table for one track over a period.
@@ -127,6 +152,10 @@ export function standings(db, { track, kind, end }) {
     return f ? [{ t, f }] : []
   })
   const index = rows.find((r) => r.t.kind === 'benchmark')
+  const vsIndex = (/** @type {TraderRow} */ t, /** @type {NonNullable<ReturnType<typeof periodFigures>>} */ f) => {
+    const ix = index ? indexReturnFor(db, index, t, f.baseDate) : null
+    return ix === null ? null : round2(f.returnPct - ix)
+  }
   rows.sort((a, b) => b.f.returnPct - a.f.returnPct || a.t.name.localeCompare(b.t.name))
   /** @type {StandingRow[]} */
   const out = []
@@ -143,7 +172,7 @@ export function standings(db, { track, kind, end }) {
       status: t.status,
       totalMicro: f.totalMicro,
       returnPct: f.returnPct,
-      vsIndexPct: index ? round2(f.returnPct - index.f.returnPct) : null,
+      vsIndexPct: vsIndex(t, f),
       sinceStartPct: f.sinceStartPct,
       maxDrawdownPct: f.maxDrawdownPct,
       cashSharePct: f.cashSharePct,
