@@ -31,18 +31,35 @@ test('the Overview shows the value chart, standings and the latest recap', async
   await expect(page.getByRole('table').getByText('Claude · Daily')).toHaveCount(0)
 })
 
-test('a glossary word opens its plain-language definition', async ({ page }) => {
+test('a glossary word opens its plain meaning in a popover, and Escape closes it', async ({ page }) => {
   await page.goto('/')
   const term = page.getByRole('button', { name: 'portfolio' })
   await term.click()
   await expect(term).toHaveAttribute('aria-expanded', 'true')
-  await expect(page.getByRole('note').filter({ hasText: 'Everything a Trader owns' })).toBeVisible()
+  const pop = page.getByRole('dialog', { name: 'portfolio' })
+  await expect(pop).toContainText('Everything a Trader owns')
+  // It sits just under the word, inside the screen.
+  const [t, p] = [await term.boundingBox(), await pop.boundingBox()]
+  expect(p && t && p.y > t.y && p.x >= 16).toBe(true)
+  await page.keyboard.press('Escape')
+  await expect(pop).toBeHidden()
+  await expect(term).toHaveAttribute('aria-expanded', 'false')
+})
+
+test('a column head explains itself through its "?" without moving the table', async ({ page }) => {
+  await page.goto('/standings')
+  const table = page.getByRole('table')
+  await expect(table).toBeVisible()
+  const before = await table.boundingBox()
+  await page.getByRole('button', { name: 'What is worst drop?' }).click()
+  await expect(page.getByRole('dialog', { name: 'Worst drop' })).toContainText('maximum drawdown')
+  expect(await table.boundingBox()).toEqual(before)
 })
 
 test('Standings rank a week with its badges', async ({ page }) => {
   await page.goto('/standings')
   await expect(page.getByRole('heading', { name: 'Week of 23–27 Nov' })).toBeVisible()
-  await expect(page.getByRole('columnheader', { name: 'Worst drop' })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /Worst drop/ })).toBeVisible()
   await expect(page.getByRole('list', { name: 'Badges' })).toBeVisible()
   await page.getByRole('button', { name: 'Since start' }).click()
   await expect(page.getByRole('heading', { name: 'Since the start, to Fri 27 Nov' })).toBeVisible()

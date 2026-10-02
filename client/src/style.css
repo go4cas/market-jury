@@ -186,3 +186,22 @@ button, a, input {
 
 /* MarketStatus "opens soon": a half-filled dot. */
 .mj-dot-half { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
+
+/* Popover: glossary terms and "?" hints. Placed by place() in components/Term.js. */
+.mj-pop[popover] {
+  position: fixed; inset: auto; margin: 0; max-width: 320px; box-sizing: border-box;
+  padding: 14px 16px; text-align: left; white-space: normal;
+  font: 400 15px/22px var(--font-ui); text-transform: none; letter-spacing: normal;
+  background: var(--color-surface-raised); color: var(--color-fg);
+  border: 1px solid var(--color-line-strong); border-top: 3px solid var(--color-brand);
+  border-radius: var(--radius-control); box-shadow: var(--shadow-float);
+}
+.mj-hint {
+  position: relative; display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; margin-left: 4px; padding: 0; vertical-align: 1px;
+  border: 1px solid var(--color-line-strong); border-radius: 999px; background: transparent;
+  color: var(--color-fg-soft); font: 600 11px/1 var(--font-mono); cursor: help;
+}
+.mj-hint::after { content: ""; position: absolute; inset: -13px; } /* 44px touch target */
+.mj-hint:hover, .mj-hint[aria-expanded="true"] { color: var(--color-brand); border-color: var(--color-brand); }
+@media (max-width: 479px) { .mj-pop[popover] { max-width: none; } }

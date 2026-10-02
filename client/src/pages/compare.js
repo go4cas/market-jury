@@ -5,7 +5,7 @@ import { useFetch } from '../composables/useFetch.js'
 import { Delta } from '../components/Delta.js'
 import { fresh, Loadable } from '../components/Loadable.js'
 import { PageHeader } from '../components/PageHeader.js'
-import { Term } from '../components/Term.js'
+import { Hint } from '../components/Term.js'
 import { TraderName } from '../components/TraderMark.js'
 import { ValueChart } from '../components/ValueChart.js'
 import { pct, usd } from '../utils/format.js'
@@ -23,12 +23,12 @@ const td = 'border-t border-line px-2 py-2.5 text-right font-mono text-sm text-f
 const ROWS = [
   { label: 'Portfolio value', show: (/** @type {any} */ d) => usd(d.totalMicro) },
   { label: 'Since start', show: (/** @type {any} */ d) => Delta(d.metrics.at(-1)?.return_pct) },
-  { label: html`${Term('Vs The Index', 'vs the index')}`, show: (/** @type {any} */ d) => Delta(d.metrics.at(-1)?.vs_index_pct) },
-  { label: html`${Term('Worst drop')}`, show: (/** @type {any} */ d) => `${(d.metrics.at(-1)?.max_drawdown_pct ?? 0).toFixed(1)}%` },
-  { label: html`${Term('Cash')} share`, show: (/** @type {any} */ d) => pct(d.metrics.at(-1)?.cash_share_pct) },
+  { label: html`Vs The Index${Hint('Vs The Index', 'vs the index')}`, show: (/** @type {any} */ d) => Delta(d.metrics.at(-1)?.vs_index_pct) },
+  { label: html`Worst drop${Hint('Worst drop')}`, show: (/** @type {any} */ d) => `${(d.metrics.at(-1)?.max_drawdown_pct ?? 0).toFixed(1)}%` },
+  { label: html`Cash share${Hint('Cash share', 'cash')}`, show: (/** @type {any} */ d) => pct(d.metrics.at(-1)?.cash_share_pct) },
   { label: 'Stocks held', show: (/** @type {any} */ d) => String(d.holdings.length) },
   { label: 'Trades', show: (/** @type {any} */ d) => String(d.trades.length) },
-  { label: html`${Term('Rule breaks')}`, show: (/** @type {any} */ d) => String(d.metrics.reduce((/** @type {number} */ s, /** @type {any} */ m) => s + (m.rule_breaks ?? 0), 0)) },
+  { label: html`Rule breaks${Hint('Rule breaks')}`, show: (/** @type {any} */ d) => String(d.metrics.reduce((/** @type {number} */ s, /** @type {any} */ m) => s + (m.rule_breaks ?? 0), 0)) },
 ]
 
 // Compare: two Traders side by side on the same measures and dates.

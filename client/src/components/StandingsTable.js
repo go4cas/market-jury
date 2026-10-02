@@ -2,7 +2,7 @@ import { html } from '@arrow-js/core'
 import { go } from '../framework/router.js'
 import { pct } from '../utils/format.js'
 import { Delta } from './Delta.js'
-import { Term } from './Term.js'
+import { Hint } from './Term.js'
 import { TraderName } from './TraderMark.js'
 
 /**
@@ -43,11 +43,11 @@ export function StandingsTable({ rows, returnLabel, compact = false }) {
           <th scope="col" class="${th}">#</th>
           <th scope="col" class="${th}">Trader</th>
           <th scope="col" class="${`${th} text-right`}">${returnLabel}</th>
-          ${compact ? '' : html`<th scope="col" class="${`${th} text-right`}">${Term('Vs The Index', 'vs the index')}</th>`}
-          ${compact ? '' : html`<th scope="col" class="${`${th} text-right`}">${Term('Worst drop')}</th>`}
-          <th scope="col" class="${`${th} text-right`}">${Term('Cash')}</th>
+          ${compact ? '' : html`<th scope="col" class="${`${th} text-right`}">Vs The Index${Hint('Vs The Index', 'vs the index')}</th>`}
+          ${compact ? '' : html`<th scope="col" class="${`${th} text-right`}">Worst drop${Hint('Worst drop')}</th>`}
+          <th scope="col" class="${`${th} text-right`}">Cash${Hint('Cash')}</th>
           ${compact ? '' : html`<th scope="col" class="${`${th} text-right`}">Trades</th>`}
-          ${compact ? '' : html`<th scope="col" class="${`${th} text-right`}">${Term('Rule breaks')}</th>`}
+          ${compact ? '' : html`<th scope="col" class="${`${th} text-right`}">Rule breaks${Hint('Rule breaks')}</th>`}
         </tr></thead>
         <tbody>${rows.map((r) => html`<tr>
           <td class="${`${td} font-mono text-fg-soft`}">${r.rank}</td>
