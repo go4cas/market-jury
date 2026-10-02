@@ -130,15 +130,29 @@ test('a visitor reads the Gallery once the Trade Master opens it, but not the Tr
   await expect(page.getByText('Settings saved.')).toBeVisible()
 })
 
-test('The cast explains who does what, with each Trader in its colour', async ({ page }) => {
+test('The cast explains who does what, with the live line-up linked to each Trader', async ({ page }) => {
   await page.goto('/')
-  await page.getByRole('link', { name: 'The cast' }).click()
+  await page.getByRole('link', { name: 'Meet the cast' }).click()
+  await expect(page).toHaveURL('/cast')
   await expect(page.getByRole('heading', { name: 'The cast', level: 1 })).toBeVisible()
-  await expect(page.getByRole('heading', { name: 'Compliance Desk' })).toBeVisible()
+  await expect(page.locator('#compliance-desk')).toContainText('When · after the Traders decide')
   // The icons are drawn as real SVG shapes, so they take up room on the page.
   const shape = await page.getByRole('main').locator('svg path').first().boundingBox()
   expect(shape?.width).toBeGreaterThan(0)
-  await expect(page.getByText('Daily + Weekly')).toHaveCount(4)
+  await page.locator('#traders').getByRole('link', { name: /Claude · Daily/ }).click()
+  await expect(page.getByRole('heading', { name: 'Claude · Daily', level: 1 })).toBeVisible()
+})
+
+test('the home page opens with the hero: live stats, the jury box and the market status', async ({ page }) => {
+  await page.goto('/')
+  await expect(page.getByRole('heading', { name: '4 AI traders. $1,000 each. 3 months.', level: 1 })).toBeVisible()
+  await expect(page.getByText('A paper-trading experiment · Day 3 of 63')).toBeVisible()
+  await expect(page.getByText('3/63')).toBeVisible()
+  await expect(page.getByRole('img', { name: /^Daily Traders now: Claude \$1,0\d\d, GPT .*; The Index \$1,0\d\d$/ })).toBeVisible()
+  // The seeded clock is past Friday's close, so the market is closed until Monday's open.
+  await expect(page.getByRole('status').filter({ hasText: 'Market closed' })).toContainText(/opens \w{3} 09:30 NY|holiday/)
+  await page.getByRole('button', { name: 'See who is ahead' }).click()
+  await expect(page.getByRole('heading', { name: 'Who is ahead' })).toBeInViewport()
 })
 
 test('Settings lists every stock in a scrolling box, with short boxes for numbers', async ({ page }) => {
@@ -160,4 +174,12 @@ test('the Overview clock shows New York and the reader\'s own time zone', async 
   await page.goto('/')
   await expect(page.getByTestId('dateline')).toContainText(/NY \d\d:\d\d · AE[DS]T \d\d:\d\d/)
   await context.close()
+})
+
+test('Daylight keeps every Trader colour', async ({ page }) => {
+  await page.addInitScript(() => localStorage.setItem('ui-mode', 'light'))
+  await page.goto('/cast')
+  const mark = page.locator('#traders a span[aria-hidden]').first()
+  await expect(mark).toBeVisible()
+  expect(await mark.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
 })

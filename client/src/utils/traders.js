@@ -12,7 +12,16 @@
  * The CSS colour of a Trader's line, mark and swatch.
  * @param {TraderLike} t
  */
-export const colourOf = (t) => (t.kind === 'benchmark' ? 'var(--color-index)' : `var(--color-trader-${t.colourSlot ?? 5})`)
+export const colourOf = (t) => (t.kind === 'benchmark' ? 'var(--color-index)' : TRADER_COLOURS[(t.colourSlot ?? 5) - 1] ?? TRADER_COLOURS[4])
+
+// Spelled out in full: Tailwind only emits the theme colours it finds written
+// somewhere, so a name built at run time ("--color-trader-" + n) would leave
+// Daylight without its Trader colours.
+const TRADER_COLOURS = [
+  'var(--color-trader-1)', 'var(--color-trader-2)', 'var(--color-trader-3)', 'var(--color-trader-4)',
+  'var(--color-trader-5)', 'var(--color-trader-6)', 'var(--color-trader-7)', 'var(--color-trader-8)',
+  'var(--color-trader-9)', 'var(--color-trader-10)', 'var(--color-trader-11)', 'var(--color-trader-12)',
+]
 
 /** @param {TraderLike} t */
 export function markOf(t) {

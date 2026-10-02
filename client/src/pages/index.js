@@ -2,6 +2,8 @@ import { html, reactive, onCleanup } from '@arrow-js/core'
 import { useMeta } from '../framework/index.js'
 import { useFetch } from '../composables/useFetch.js'
 import { Delta } from '../components/Delta.js'
+import { LandingHero } from '../components/LandingHero.js'
+import { MarketStatus } from '../components/MarketStatus.js'
 import { fresh, Loadable } from '../components/Loadable.js'
 import { Segmented } from '../components/Segmented.js'
 import { StandingsTable } from '../components/StandingsTable.js'
@@ -47,18 +49,21 @@ function OverviewPage() {
 
   return html`
     <div class="flex flex-col gap-7">
-      <header class="flex flex-col gap-1.5 border-b border-line pb-3">
-        <h1 class="font-display text-4xl font-bold tracking-tight text-fg sm:text-5xl">Market Jury</h1>
-        <p class="prompt prompt-caret">4 AI traders | 1 market | you are the jury</p>
-        <div class="prompt flex flex-wrap gap-x-4 gap-y-1" data-testid="dateline">
-          <span>${() => formatDateline(new Date(clock.now), here)}</span>
-          ${() => (overview.data()?.status.day ? html`<span>Day ${overview.data().status.day}</span>` : '')}
-          <span>${() => clockLine(new Date(clock.now))}</span>
-          ${() => (overview.data() ? html`<span class="text-fg">Market ${overview.data().status.market}</span>` : '')}
-        </div>
-      </header>
+      <div class="prompt flex flex-wrap items-center gap-x-4 gap-y-1" data-testid="dateline">
+        <span>${() => formatDateline(new Date(clock.now), here)}</span>
+        ${() => (overview.data()?.status.day ? html`<span>Day ${overview.data().status.day}</span>` : '')}
+        <span>${() => clockLine(new Date(clock.now))}</span>
+        ${() => (overview.data() ? MarketStatus({ market: overview.data().status.market, changesAt: overview.data().status.changesAt, now: clock.now }) : '')}
+      </div>
 
-      ${Loadable(overview, (o) => o.status.state === 'setup' || !o.status.latestDate ? NotStarted(o.status.state) : html`
+      ${Loadable(overview, (o) => html`${LandingHero({ hero: o.hero, day: o.status.day, started: o.status.state !== 'setup', onAhead: toAhead, onCast: navigate('/cast') })}
+        ${o.status.state === 'setup' || !o.status.latestDate ? NotStarted(o.status.state) : Board(o)}`)}
+    </div>
+  `
+
+  /** @param {any} o */
+  function Board(o) {
+    return html`
         ${o.movers.length ? html`<p class="flex flex-wrap gap-x-5 gap-y-1 border-b border-line pb-3 font-mono text-sm text-fg" aria-label="${`Biggest moves on ${day(o.status.latestDate)}`}">${o.movers.map((/** @type {any} */ m) => html`<span>${m.ticker} ${Delta(m.changePct)}</span>`)}</p>` : ''}
 
         <section class="flex flex-col gap-3" aria-labelledby="ahead">
@@ -84,9 +89,14 @@ function OverviewPage() {
             <p class="text-[15px] leading-relaxed text-fg">${o.recap.body.split(/\n\s*\n/)[0]}</p>
             <a href="/columnist" class="${`${link} self-start`}" @click="${navigate('/columnist')}">Read the recap</a>
           </article>` : ''}
-      `)}
-    </div>
-  `
+      `
+  }
+}
+
+// "See who is ahead": scroll to the chart (instantly, if the reader asked for less motion).
+function toAhead() {
+  const smooth = !window.matchMedia('(prefers-reduced-motion: reduce)').matches
+  document.getElementById('ahead')?.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', block: 'start' })
 }
 
 /** @param {string} state */
@@ -94,7 +104,7 @@ function NotStarted(state) {
   return html`
     <section class="rounded-panel border border-line bg-surface-raised p-4 shadow-panel">
       <p class="prompt prompt-caret">Status</p>
-      <h2 class="mt-2 font-display text-2xl font-semibold text-fg">${state === 'setup' ? 'The experiment has not started yet' : 'Waiting for the first evening run'}</h2>
+      <h2 id="ahead" class="mt-2 font-display text-2xl font-semibold text-fg">${state === 'setup' ? 'The experiment has not started yet' : 'Waiting for the first evening run'}</h2>
       <p class="mt-2 max-w-prose text-fg-soft">
         Four AI Traders will each get $1,000 of virtual money and decide every evening what to buy and sell.
         Their portfolios, trades and reasons will show up here once the first trading day has run.
