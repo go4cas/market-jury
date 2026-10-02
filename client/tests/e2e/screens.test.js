@@ -33,6 +33,8 @@ test('the Overview shows the value chart, standings and the latest recap', async
 
 test('a glossary word opens its plain meaning in a popover, and Escape closes it', async ({ page }) => {
   await page.goto('/')
+  // Measure once Overview has its data: content arriving above the word would move it after the popover is placed.
+  await page.waitForLoadState('networkidle')
   const term = page.getByRole('button', { name: 'portfolio' })
   await term.click()
   await expect(term).toHaveAttribute('aria-expanded', 'true')
