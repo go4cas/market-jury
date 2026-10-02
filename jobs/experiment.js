@@ -1,6 +1,7 @@
 // The experiment's life: set up the line-up, rehearse with a dry run, start,
 // pause and resume. The Trade Master drives these from the admin screens.
 import { isTradingDay, marketDate, nextTradingDay } from '../core/calendar.js'
+import { DEFAULT_RULES } from '../core/portfolio.js'
 import { createIndex, createTrader } from '../core/traders.js'
 import { ensureColumnistModels, ensureModel, LINE_UP } from '../agents/models.js'
 import { runTrader } from '../agents/trader.js'
@@ -17,10 +18,18 @@ import { floorRunnerDue, openingBellDue } from './schedule.js'
  * @property {number} starting_cash_micro
  * @property {number} budget_ceiling_micro
  * @property {number} gallery_enabled
+ * @property {string | null} default_rules JSON: the guardrails a new Trader starts with
  */
 
 /** @param {Database} db @returns {Settings} */
 export const settings = (db) => /** @type {Settings} */ (db.query('SELECT * FROM settings WHERE id = 1').get())
+
+/**
+ * The guardrails a new Trader starts with: the Trade Master's last change, else the built-in defaults.
+ * @param {Database} db
+ * @returns {import('../core/portfolio.js').Rules}
+ */
+export const defaultRules = (db) => ({ ...DEFAULT_RULES, ...JSON.parse(settings(db).default_rules ?? '{}') })
 
 /**
  * Create the PRD's line-up the first time: four models, each with a daily and
@@ -34,12 +43,13 @@ export function seedLineUp(db, now) {
   ensureColumnistModels(db, now)
   if (db.query("SELECT 1 FROM traders WHERE kind = 'ai'").get()) return 0
   const { starting_cash_micro } = settings(db)
+  const rules = defaultRules(db)
   let created = 0
   db.transaction(() => {
     for (const t of LINE_UP.traders) {
       const modelId = ensureModel(db, t, now)
       for (const cadence of /** @type {const} */ (['daily', 'weekly'])) {
-        createTrader(db, { name: `${t.name} ${cadence}`, modelId, cadence, colourSlot: t.colourSlot, startedOn: null, asOf: marketDate(now), cashMicro: starting_cash_micro, now })
+        createTrader(db, { name: `${t.name} ${cadence}`, modelId, cadence, colourSlot: t.colourSlot, startedOn: null, asOf: marketDate(now), cashMicro: starting_cash_micro, rules, now })
         created++
       }
     }

@@ -7,7 +7,7 @@ import { rulesFor } from '../core/portfolio.js'
 import { createTrader, retireTrader } from '../core/traders.js'
 import { budget } from '../agents/budget.js'
 import { costOf, ensureModel, KEY_NAMES } from '../agents/models.js'
-import { dryRun, firstDecisionDate, pauseExperiment, resumeExperiment, seedLineUp, setStartingCash, settings, startExperiment } from '../jobs/experiment.js'
+import { defaultRules, dryRun, firstDecisionDate, pauseExperiment, resumeExperiment, seedLineUp, setStartingCash, settings, startExperiment } from '../jobs/experiment.js'
 import { openingBellDue, rerunStep, STEPS } from '../jobs/schedule.js'
 import { isTradeMaster } from './auth.js'
 import { error, json, readJson } from './http.js'
@@ -135,15 +135,14 @@ export function adminRoutes(ctx) {
     '/api/admin/settings': {
       GET: guarded(() => {
         const s = settings(db)
-        const anyTrader = /** @type {{ id: number } | null} */ (db.query("SELECT id FROM traders WHERE kind = 'ai' AND status = 'active' ORDER BY id LIMIT 1").get())
-        const rules = anyTrader ? rulesFor(db, anyTrader.id, marketDate(ctx.now())) : null
+        const rules = defaultRules(db)
         return json({
           state: s.experiment_state,
           galleryEnabled: s.gallery_enabled === 1,
           budgetCeilingUsd: fromMicro(s.budget_ceiling_micro),
           startingCashUsd: fromMicro(s.starting_cash_micro),
-          positionCapPct: rules?.position_cap_pct ?? null,
-          perTradeCostUsd: rules ? fromMicro(rules.per_trade_cost_micro) : null,
+          positionCapPct: rules.position_cap_pct,
+          perTradeCostUsd: fromMicro(rules.per_trade_cost_micro),
           menu: db.query('SELECT ticker, name, asset_class, on_menu FROM instruments ORDER BY ticker').all(),
         })
       }),
@@ -151,25 +150,30 @@ export function adminRoutes(ctx) {
         const b = await body(req)
         const now = ctx.now()
         const at = now.toISOString()
-        if ('galleryEnabled' in b) db.run('UPDATE settings SET gallery_enabled = ?, updated_at = ? WHERE id = 1', [b.galleryEnabled === true ? 1 : 0, at])
-        if ('budgetCeilingUsd' in b) {
-          const usd = positive(b.budgetCeilingUsd, 'The budget ceiling')
-          db.run('UPDATE settings SET budget_ceiling_micro = ?, updated_at = ? WHERE id = 1', [toMicro(usd), at])
-        }
-        if ('startingCashUsd' in b) setStartingCash(db, toMicro(positive(b.startingCashUsd, 'Starting cash')), now)
+        // Check every field before changing anything, then change them all together,
+        // so a refused change leaves everything as it was.
+        const gallery = 'galleryEnabled' in b ? (b.galleryEnabled === true ? 1 : 0) : null
+        const ceilingMicro = 'budgetCeilingUsd' in b ? toMicro(positive(b.budgetCeilingUsd, 'The budget ceiling', 10_000)) : null
+        const cashMicro = 'startingCashUsd' in b ? toMicro(positive(b.startingCashUsd, 'Starting cash', 1_000_000)) : null
         /** @type {Record<string, number>} */
         const guardrails = {}
         if ('positionCapPct' in b) {
-          const pct = positive(b.positionCapPct, 'The position cap')
-          if (pct > 100) throw new Error('The position cap is a percentage of the portfolio, so at most 100.')
+          const pct = Number(b.positionCapPct)
+          if (!(pct > 0)) throw new Error('The position cap must be more than zero.')
+          if (!(pct <= 100)) throw new Error('The position cap is a percentage of the portfolio, so at most 100.')
           guardrails.position_cap_pct = pct
         }
         if ('perTradeCostUsd' in b) {
           const usd = Number(b.perTradeCostUsd)
-          if (!(usd >= 0)) throw new Error('The per-trade cost must be zero or more dollars.')
+          if (!(usd >= 0 && usd <= 1_000)) throw new Error('The per-trade cost must be between $0 and $1,000.')
           guardrails.per_trade_cost_micro = toMicro(usd)
         }
-        if (Object.keys(guardrails).length) setGuardrails(db, guardrails, now)
+        db.transaction(() => {
+          if (gallery !== null) db.run('UPDATE settings SET gallery_enabled = ?, updated_at = ? WHERE id = 1', [gallery, at])
+          if (ceilingMicro !== null) db.run('UPDATE settings SET budget_ceiling_micro = ?, updated_at = ? WHERE id = 1', [ceilingMicro, at])
+          if (cashMicro !== null) setStartingCash(db, cashMicro, now)
+          if (Object.keys(guardrails).length) setGuardrails(db, guardrails, now)
+        })()
         return json({ ok: true })
       }),
     },
@@ -202,7 +206,7 @@ export function adminRoutes(ctx) {
         if (!slot) throw new Error('All 12 Trader colours are in use. Retire a Trader first.')
         const modelId = ensureModel(db, t.model, now)
         const startedOn = s.experiment_state === 'setup' ? null : firstDecisionDate(db, now)
-        const id = createTrader(db, { name: t.name, modelId, cadence: t.cadence, colourSlot: slot, startedOn, asOf: startedOn ?? marketDate(now), cashMicro: s.starting_cash_micro, now })
+        const id = createTrader(db, { name: t.name, modelId, cadence: t.cadence, colourSlot: slot, startedOn, asOf: startedOn ?? marketDate(now), cashMicro: s.starting_cash_micro, rules: defaultRules(db), now })
         return json({ id, startedOn, projection: projection(db, now, t.model, t.cadence) }, 201)
       }),
     },
@@ -240,12 +244,15 @@ export function adminRoutes(ctx) {
 const budgetJson = (b) => ({ month: b.month, level: b.level, spentUsd: fromMicro(b.spentMicro), projectedUsd: fromMicro(b.projectedMicro), ceilingUsd: fromMicro(b.ceilingMicro) })
 
 /**
+ * A dollar amount above zero and at most `max` (so never infinite).
  * @param {unknown} value
  * @param {string} what
+ * @param {number} max dollars
  */
-function positive(value, what) {
+function positive(value, what, max) {
   const n = Number(value)
   if (!(n > 0)) throw new Error(`${what} must be more than zero.`)
+  if (!(n <= max)) throw new Error(`${what} can be at most $${max.toLocaleString('en-US')}.`)
   return n
 }
 
@@ -256,17 +263,21 @@ function positive(value, what) {
 function newTraderFrom(b) {
   const name = String(b.name ?? '').trim()
   if (!name) throw new Error('Give the Trader a name.')
+  if (name.length > 60) throw new Error('The Trader name can be at most 60 characters.')
   const provider = String(b.provider ?? '')
   if (!(provider in KEY_NAMES)) throw new Error(`The provider must be one of: ${Object.keys(KEY_NAMES).join(', ')}.`)
   const cadence = b.cadence === 'weekly' ? 'weekly' : b.cadence === 'daily' ? 'daily' : null
   if (!cadence) throw new Error('The cadence must be daily or weekly.')
   const modelVersion = String(b.modelVersion ?? '').trim()
   if (!modelVersion) throw new Error('Give the exact model version.')
+  if (modelVersion.length > 100) throw new Error('The model version can be at most 100 characters.')
   const effort = ['low', 'medium', 'high', 'default'].includes(String(b.effort)) ? String(b.effort) : 'medium'
+  const cached = Number(b.cachedUsdPerM ?? 0)
+  if (!(cached >= 0 && cached <= 1_000)) throw new Error('The cached input price must be between $0 and $1,000.')
   return {
     name,
     cadence: /** @type {'daily' | 'weekly'} */ (cadence),
-    model: { provider, model_version: modelVersion, effort, input: positive(b.inputUsdPerM, 'The input price'), cached: Number(b.cachedUsdPerM ?? 0) || 0, output: positive(b.outputUsdPerM, 'The output price') },
+    model: { provider, model_version: modelVersion, effort, input: positive(b.inputUsdPerM, 'The input price', 1_000), cached, output: positive(b.outputUsdPerM, 'The output price', 1_000) },
   }
 }
 
@@ -291,7 +302,8 @@ function projection(db, now, m, cadence) {
 }
 
 /**
- * New guardrails for every active AI Trader, from its next decision.
+ * New guardrails for every active AI Trader, from its next decision, and for
+ * every Trader added from now on.
  * @param {Database} db
  * @param {Record<string, number>} changes
  * @param {Date} now
@@ -302,6 +314,7 @@ function setGuardrails(db, changes, now) {
   const upsert = db.prepare('INSERT INTO rule_sets (trader_id, rules, effective_from) VALUES (?, ?, ?) ON CONFLICT (trader_id, effective_from) DO UPDATE SET rules = excluded.rules')
   db.transaction(() => {
     for (const id of traders) upsert.run(id, JSON.stringify({ ...rulesFor(db, id, from), ...changes }), from)
+    db.run('UPDATE settings SET default_rules = ?, updated_at = ? WHERE id = 1', [JSON.stringify({ ...defaultRules(db), ...changes }), now.toISOString()])
   })()
 }
 

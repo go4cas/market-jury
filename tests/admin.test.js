@@ -4,6 +4,7 @@ import { MockLanguageModelV4 } from 'ai/test'
 import { startServer } from '../server/app.js'
 import { createAlpaca } from '../market/alpaca.js'
 import { saveCalendar } from '../market/store.js'
+import { rulesFor } from '../core/portfolio.js'
 import { fakeAlpacaFetch } from './fake-alpaca.js'
 import { calendar2026, testMarket, TEST_MENU } from './market-fixture.js'
 import { testClientDir, testDb } from './helpers.js'
@@ -101,6 +102,53 @@ describe('Trade Master routes', () => {
     const late = await call('/api/admin/settings', { method: 'PATCH', body: { startingCashUsd: 5000 } })
     expect(await data(Promise.resolve(late))).toEqual({ error: 'Starting cash can only change before the experiment starts.' })
     expect((await call('/api/admin/settings', { method: 'PATCH', body: { positionCapPct: 120 } })).status).toBe(400)
+  })
+
+  test('a refused settings change changes nothing, not even the fields that were fine', async () => {
+    await call('/api/admin/traders')
+    const snapshot = () => ({ settings: db.query('SELECT * FROM settings').get(), ledger: db.query('SELECT * FROM cash_ledger').all(), rules: db.query('SELECT * FROM rule_sets').all() })
+    const before = snapshot()
+    for (const body of [
+      { galleryEnabled: true, budgetCeilingUsd: -1 },
+      { galleryEnabled: true, startingCashUsd: 2000, positionCapPct: 120 },
+      { galleryEnabled: true, positionCapPct: 10, perTradeCostUsd: -1 },
+      { budgetCeilingUsd: 10_001 },
+      { startingCashUsd: 1_000_001 },
+      { perTradeCostUsd: 1_001 },
+      { budgetCeilingUsd: 'Infinity' },
+      { positionCapPct: 'lots' },
+    ]) {
+      expect((await call('/api/admin/settings', { method: 'PATCH', body })).status).toBe(400)
+    }
+    expect(snapshot()).toEqual(before)
+
+    // Starting cash is refused once running, which happens mid-way through the writes.
+    await call('/api/admin/experiment/start', { method: 'POST', body: {} })
+    const started = snapshot()
+    const late = await call('/api/admin/settings', { method: 'PATCH', body: { galleryEnabled: true, budgetCeilingUsd: 40, startingCashUsd: 5000, positionCapPct: 10 } })
+    expect(late.status).toBe(400)
+    expect(snapshot()).toEqual(started)
+    expect(await data(call('/api/admin/settings'))).toMatchObject({ galleryEnabled: false, budgetCeilingUsd: 25, positionCapPct: 20 })
+  })
+
+  test('a Trader added after the guardrails change trades under the new guardrails', async () => {
+    await call('/api/admin/settings', { method: 'PATCH', body: { positionCapPct: 10, perTradeCostUsd: 1 } })
+    expect(await data(call('/api/admin/settings'))).toMatchObject({ positionCapPct: 10, perTradeCostUsd: 1 })
+    await call('/api/admin/traders')
+    await call('/api/admin/experiment/start', { method: 'POST', body: {} })
+    const trader = { name: 'Late joiner', provider: 'anthropic', modelVersion: 'claude-opus-5-5', cadence: 'daily', inputUsdPerM: 5, outputUsdPerM: 25 }
+    const { id, startedOn } = await data(call('/api/admin/traders', { method: 'POST', body: trader }))
+    expect(rulesFor(db, id, startedOn)).toMatchObject({ position_cap_pct: 10, per_trade_cost_micro: 1_000_000 })
+    // The set-up line-up, seeded after the change, has them too.
+    const first = /** @type {{ id: number }} */ (db.query("SELECT id FROM traders WHERE kind = 'ai' ORDER BY id LIMIT 1").get())
+    expect(rulesFor(db, first.id, startedOn)).toMatchObject({ position_cap_pct: 10, per_trade_cost_micro: 1_000_000 })
+  })
+
+  test('refuses a Trader with an overlong name or model version, or a price that is not a number', async () => {
+    const trader = { name: 'Claude Opus daily', provider: 'anthropic', modelVersion: 'claude-opus-5-5', cadence: 'daily', inputUsdPerM: 5, outputUsdPerM: 25 }
+    for (const body of [{ ...trader, name: 'x'.repeat(61) }, { ...trader, modelVersion: 'x'.repeat(101) }, { ...trader, inputUsdPerM: 'Infinity' }, { ...trader, cachedUsdPerM: -1 }, { ...trader, outputUsdPerM: 1e12 }]) {
+      expect((await call('/api/admin/traders', { method: 'POST', body })).status).toBe(400)
+    }
   })
 
   test('adds a Trader with its projected cost, and retires one at the next open', async () => {

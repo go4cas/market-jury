@@ -24,6 +24,9 @@ export function startServer({ db, port, clientDir, now, steps }) {
 
   return Bun.serve({
     port,
+    // Every form here is a few hundred bytes of JSON; Bun answers 413 to anything
+    // bigger before a handler reads it.
+    maxRequestBodySize: 64 * 1024,
     routes: {
       '/api/health': () => json({ ok: true }),
 

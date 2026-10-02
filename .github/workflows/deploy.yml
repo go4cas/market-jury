@@ -1,6 +1,6 @@
 name: Deploy
 
-# Ships main to the VPS: check, build, copy the release over SSH, switch to it, restart.
+# Ships main to the VPS: check (types, tests, browser tests), build, copy the release over SSH, switch to it, restart.
 # Stays off until the repository variable DEPLOY_ENABLED is "true" (see deploy/README.md).
 on:
   push:
@@ -17,7 +17,8 @@ concurrency:
 jobs:
   deploy:
     name: Deploy to the VPS
-    if: vars.DEPLOY_ENABLED == 'true'
+    # Only main ships, also when the workflow is run by hand from another branch.
+    if: vars.DEPLOY_ENABLED == 'true' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
@@ -27,6 +28,9 @@ jobs:
       - run: bun install --frozen-lockfile
       - run: bun run typecheck
       - run: bun run test
+      # The same browser tests as CI, so a commit that fails them never ships.
+      - run: bunx playwright install --with-deps chromium
+      - run: bun run test:e2e
       - run: bun run build
 
       - name: Package the release
