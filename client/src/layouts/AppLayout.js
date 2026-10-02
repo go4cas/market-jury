@@ -16,8 +16,7 @@ const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs']
 /** @param {any} content */
 export function AppLayout(content) {
   const signOut = async () => {
-    await sessionState.logout()
-    go('/login')
+    if (await sessionState.logout()) go('/login')
   }
 
   return html`

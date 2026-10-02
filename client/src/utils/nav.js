@@ -7,8 +7,7 @@ import { go } from '../framework/router.js'
  */
 export const navigate = (path) => (/** @type {Event} */ e) => {
   e.preventDefault()
-  if (path.includes('?')) window.navigation.navigate(path)
-  else go(path)
+  go(path)
 }
 
 /**

@@ -1,5 +1,5 @@
-import { html, reactive, onCleanup } from '@arrow-js/core'
-import { useMeta } from '../../framework/index.js'
+import { html, reactive } from '@arrow-js/core'
+import { onLeave, useMeta } from '../../framework/index.js'
 import { useFetch } from '../../composables/useFetch.js'
 import { useToast } from '../../composables/useToast.js'
 import { Banner } from '../../components/Banner.js'
@@ -87,7 +87,7 @@ function SettingsPage() {
 
   // While a dry run is going, check on it every few seconds.
   const poll = setInterval(() => { if (rehearsal.data()?.running) rehearsal.refetch() }, 3000)
-  try { onCleanup(() => clearInterval(poll)) } catch {}
+  onLeave(() => clearInterval(poll))
 
   /**
    * @param {'POST' | 'PATCH'} method

@@ -137,6 +137,24 @@ describe('useForm — submission lifecycle', () => {
     expect(form.submitting).toBe(false)
   })
 
+  it('surfaces a rejecting validate() as form.message, resets submitting, and lets the next submit through', async () => {
+    const onSubmit = vi.fn()
+    let fail = true
+    const { form, handleSubmit } = useForm(
+      { x: '' },
+      { validate: async () => { if (fail) throw new Error('Could not check'); return {} }, onSubmit }
+    )
+    await handleSubmit(fakeSubmitEvent())
+    expect(form.message).toBe('Could not check')
+    expect(form.submitting).toBe(false)
+    expect(onSubmit).not.toHaveBeenCalled()
+
+    fail = false
+    await handleSubmit(fakeSubmitEvent())
+    expect(onSubmit).toHaveBeenCalledTimes(1)
+    expect(form.submitted).toBe(true)
+  })
+
   it('calls preventDefault on the submit event', async () => {
     const e = fakeSubmitEvent()
     const { handleSubmit } = useForm({})

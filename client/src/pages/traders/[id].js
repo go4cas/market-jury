@@ -85,12 +85,12 @@ function TraderView(d) {
       </section>` : ''}
 
       <section class="flex flex-col gap-3">
-        <h2 class="${h2}">Every trade</h2>
+        <h2 class="${h2}">${d.totalTrades > d.trades.length ? `The latest ${d.trades.length} of ${d.totalTrades} trades` : 'Every trade'}</h2>
         ${d.trades.length ? html`${() => (ui.allTrades ? d.trades : d.trades.slice(0, 10)).map((/** @type {any} */ x) => html`<article class="flex flex-col gap-1.5 border-t border-line pt-3">
             <p class="flex flex-wrap items-center gap-x-3 font-mono text-[13px] text-fg-soft"><span class="rounded-control border border-line-strong px-2 font-semibold text-fg">${x.side.toUpperCase()}</span><span>${day(x.date)}</span><span>${Ticker(x.ticker, x.name)}</span><span>${shares(x.quantityMicro)} at ${usd(x.priceMicro)}</span><span>${usd(x.amountMicro)}</span></p>
             <p class="border-l-2 border-line-strong pl-3 text-[15px] leading-6 text-fg">“${x.reason}”</p>
           </article>`)}
-          ${() => (!ui.allTrades && d.trades.length > 10 ? html`<button type="button" class="inline-flex min-h-11 items-center self-start font-mono text-sm text-brand underline underline-offset-4" @click="${() => { ui.allTrades = true }}">Show all ${d.trades.length} trades</button>` : '')}`
+          ${() => (!ui.allTrades && d.trades.length > 10 ? html`<button type="button" class="inline-flex min-h-11 items-center self-start font-mono text-sm text-brand underline underline-offset-4" @click="${() => { ui.allTrades = true }}">Show ${d.totalTrades > d.trades.length ? 'the latest' : 'all'} ${d.trades.length} trades</button>` : '')}`
           : html`<p class="text-fg-soft">No trades yet.</p>`}
       </section>
 

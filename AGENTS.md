@@ -115,6 +115,7 @@ These are non-obvious constraints. Violating them causes silent bugs or runtime 
 - Layout `'app'`: the shared top bar (logo mark, name, TRADE MASTER pill and Terminal/Daylight toggle on the first row; the nav on its own scrolling row) and the "Virtual money only. Not financial advice." footer. Layout `'basic'`: a centred panel (login, not found).
 - Access rules are one pure function, `routeGuard()` in `client/src/state/sessionState.js`, registered in `main.js`: `/admin/*` is Trade Master only; everything else needs the Gallery open or the Trade Master. The server enforces the same rules; the client guard is only for navigation.
 - Composables: `useFetch` for API calls (do not hand-roll fetch + loading state), `useApi(() => url)` when the address follows reactive state (it refetches on change and keeps the server's plain-language error), `send()` in `utils/api.js` for writes, `useForm` for forms, `useToast` for notifications, `useRoute`/`useRouter` for navigation. Call them inside page/component functions.
+- Timers, pollers, watchers and charts that must stop when the reader leaves a page register with `onLeave(fn)` (from `framework/index.js`); the router runs them on every navigation. Arrow's `onCleanup` only works inside `component()`, never in a page function or a `Loadable` view.
 - State modules: module-scope `reactive({...})` singletons in `client/src/state/`.
 - Import components directly from their files (no barrel).
 

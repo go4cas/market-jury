@@ -1,6 +1,7 @@
 import { nextTick } from '@arrow-js/core'
 import { routerState } from '../state/routerState.js'
 import { clearMeta } from './meta.js'
+import { leavePage } from './lifecycle.js'
 
 /**
  * @typedef {{ from: string | null, to: string }} GuardContext
@@ -110,8 +111,10 @@ export async function resolveRoute(path = window.location.pathname) {
   const cleanPath = normalizePath(path)
 
   // The router owns the meta lifecycle: stop the previous page's useMeta
-  // watchers so reactive titles don't keep firing after navigation.
+  // watchers so reactive titles don't keep firing after navigation, and the
+  // page lifecycle: the previous page's timers, pollers and requests stop.
   clearMeta()
+  leavePage()
 
   Object.assign(routerState, { status: 'loading', path: cleanPath, error: '', page: null, params: {}, meta: {} })
 
@@ -151,9 +154,11 @@ export async function resolveRoute(path = window.location.pathname) {
 // go() is now a thin wrapper — the navigate event handler owns everything.
 // AbortError is expected whenever a navigation is preempted by a newer one
 // or cancelled by a guard — swallow it so call sites don't leak rejections.
+// Only the pathname is normalised; the query and hash travel with it.
 /** @param {string} path */
 export function go(path) {
-  return window.navigation.navigate(normalizePath(path)).finished?.catch((err) => {
+  const url = new URL(path, window.location.href)
+  return window.navigation.navigate(normalizePath(url.pathname) + url.search + url.hash).finished?.catch((err) => {
     if (err.name !== 'AbortError') throw err
   })
 }

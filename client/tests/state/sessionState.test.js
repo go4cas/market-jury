@@ -1,5 +1,32 @@
-import { describe, it, expect } from 'vitest'
-import { routeGuard } from '../../src/state/sessionState.js'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { routeGuard, sessionState } from '../../src/state/sessionState.js'
+import { toastState } from '../../src/state/toastState.js'
+
+describe('sessionState.logout', () => {
+  afterEach(() => { vi.unstubAllGlobals(); toastState.toasts.splice(0) })
+
+  it('clears the session only once the server confirms', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response(null, { status: 204 })))
+    sessionState.tradeMaster = true
+    expect(await sessionState.logout()).toBe(true)
+    expect(sessionState.tradeMaster).toBe(false)
+  })
+
+  it('stays signed in and says so when the server fails', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500 })))
+    sessionState.tradeMaster = true
+    expect(await sessionState.logout()).toBe(false)
+    expect(sessionState.tradeMaster).toBe(true)
+    expect(toastState.toasts.at(-1)?.type).toBe('error')
+  })
+
+  it('stays signed in when the network is down', async () => {
+    vi.stubGlobal('fetch', vi.fn(async () => { throw new TypeError('Failed to fetch') }))
+    sessionState.tradeMaster = true
+    expect(await sessionState.logout()).toBe(false)
+    expect(sessionState.tradeMaster).toBe(true)
+  })
+})
 
 const visitor = { tradeMaster: false, galleryEnabled: false }
 const galleryVisitor = { tradeMaster: false, galleryEnabled: true }

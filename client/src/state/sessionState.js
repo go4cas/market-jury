@@ -1,4 +1,5 @@
 import { reactive } from '@arrow-js/core'
+import { useToast } from '../composables/useToast.js'
 
 /**
  * @typedef {object} Session
@@ -21,9 +22,19 @@ export const sessionState = reactive({
     } catch { /* server unreachable: stay logged out */ }
   },
 
+  /**
+   * Sign out. Only a confirmed sign-out clears the session; otherwise say so
+   * and stay signed in, so a shared browser is never left signed in unawares.
+   * @returns {Promise<boolean>} whether the server signed the Trade Master out
+   */
   async logout() {
-    await fetch('/api/auth/logout', { method: 'POST' })
+    const res = await fetch('/api/auth/logout', { method: 'POST' }).catch(() => null)
+    if (!res?.ok) {
+      useToast().error('Could not sign out, so you are still signed in. Try again in a moment.')
+      return false
+    }
     this.tradeMaster = false
+    return true
   },
 })
 

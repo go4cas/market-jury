@@ -1,4 +1,5 @@
-import { reactive, onCleanup } from '@arrow-js/core'
+import { reactive } from '@arrow-js/core'
+import { onLeave } from '../framework/lifecycle.js'
 
 /**
  * Reactive HTTP fetching. refetch() aborts the previous in-flight request.
@@ -53,7 +54,7 @@ export function useFetch(url, options = {}) {
     }
   }
 
-  try { onCleanup(() => controller?.abort()) } catch {}
+  onLeave(() => controller?.abort())
   if (immediate) execute()
 
   function reset() {

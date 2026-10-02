@@ -11,6 +11,8 @@ import {
   beforeEach as beforeEachGuard,
 } from '../../src/framework/router.js'
 import { routerState } from '../../src/state/routerState.js'
+import { onLeave } from '../../src/framework/lifecycle.js'
+import { useFetch } from '../../src/composables/useFetch.js'
 
 describe('fileToRoutePath', () => {
   it('converts index.js to root', () => {
@@ -251,6 +253,59 @@ describe('resolveRoute — supersession', () => {
     expect(routerState.path).toBe('/')
     expect(routerState.status).toBe('ready')
     expect(routerState.params).toEqual({})
+  })
+})
+
+describe('page lifecycle — onLeave', () => {
+  afterEach(() => { vi.useRealTimers(); vi.unstubAllGlobals() })
+
+  it('stops the previous page\'s timers and requests when the router moves on, once', async () => {
+    vi.useFakeTimers()
+    const tick = vi.fn()
+    const timer = setInterval(tick, 1000)
+    onLeave(() => clearInterval(timer))
+    let signal
+    vi.stubGlobal('fetch', vi.fn((_url, opts) => { signal = opts.signal; return new Promise(() => {}) }))
+    useFetch('/api/slow')
+
+    vi.advanceTimersByTime(1000)
+    expect(tick).toHaveBeenCalledTimes(1)
+
+    await resolveRoute('/')
+    vi.advanceTimersByTime(5000)
+    expect(tick).toHaveBeenCalledTimes(1)
+    expect(signal.aborted).toBe(true)
+
+    // What the new page registers waits for the next navigation.
+    const next = vi.fn()
+    onLeave(next)
+    await resolveRoute('/')
+    expect(next).toHaveBeenCalledTimes(1)
+    await resolveRoute('/')
+    expect(next).toHaveBeenCalledTimes(1)
+  })
+
+  it('one failing cleanup does not stop the others', async () => {
+    const after = vi.fn()
+    const quiet = vi.spyOn(console, 'error').mockImplementation(() => {})
+    onLeave(() => { throw new Error('broken') })
+    onLeave(after)
+    await resolveRoute('/')
+    expect(after).toHaveBeenCalledTimes(1)
+    quiet.mockRestore()
+  })
+})
+
+describe('go — keeps the query and hash', () => {
+  afterEach(() => vi.unstubAllGlobals())
+
+  it('normalises only the pathname', async () => {
+    const navigate = vi.fn(() => ({ finished: Promise.resolve() }))
+    vi.stubGlobal('navigation', { navigate })
+    await go('/standings/?kind=week&end=2026-09-25#top')
+    expect(navigate).toHaveBeenCalledWith('/standings?kind=week&end=2026-09-25#top')
+    await go('/history')
+    expect(navigate).toHaveBeenLastCalledWith('/history')
   })
 })
 

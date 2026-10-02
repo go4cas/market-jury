@@ -1,4 +1,5 @@
-import { html, onCleanup, watch } from '@arrow-js/core'
+import { html, watch } from '@arrow-js/core'
+import { onLeave } from '../framework/lifecycle.js'
 import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { uiState } from '../state/uiState.js'
@@ -74,11 +75,11 @@ export function ValueChart({ dates, lines, label, height = 220 }) {
     if (plot && !document.getElementById(id)) { plot.destroy(); plot = null; stop(); observer?.disconnect(); return }
     draw()
   }))
-  try {
+  if (typeof ResizeObserver === 'function') {
     observer = new ResizeObserver(() => { const el = document.getElementById(id); if (plot && el && el.clientWidth !== plot.width) plot.setSize({ width: el.clientWidth, height }) })
     requestAnimationFrame(() => { const el = document.getElementById(id); if (el) observer?.observe(el) })
-    onCleanup(() => { stop(); observer?.disconnect(); plot?.destroy() })
-  } catch { /* outside a component (tests): no cleanup hook */ }
+  }
+  onLeave(() => { stop(); observer?.disconnect(); plot?.destroy(); plot = null })
 
   const last = (/** @type {Line} */ l) => [...l.values].reverse().find((v) => v !== null) ?? null
   const summary = `${label}: ${lines.map((l) => `${displayName(l.name)} ${usd(last(l), { whole: true })}`).join(', ')}`
