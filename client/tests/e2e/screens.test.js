@@ -287,3 +287,35 @@ test('Daylight keeps every Trader colour', async ({ page }) => {
   await expect(mark).toBeVisible()
   expect(await mark.evaluate((e) => getComputedStyle(e).backgroundColor)).not.toBe('rgba(0, 0, 0, 0)')
 })
+
+test('the top bar links to the code on GitHub and switches the look with an icon', async ({ page }) => {
+  await page.goto('/')
+  const header = page.locator('header')
+  const github = header.getByRole('link', { name: 'Source code on GitHub (opens in a new tab)' })
+  await expect(github).toHaveAttribute('href', 'https://github.com/go4cas/market-jury')
+  await expect(github).toHaveAttribute('target', '_blank')
+
+  // Terminal shows a sun for switching to light; Daylight shows a moon for switching back.
+  await header.getByRole('button', { name: 'Switch to light theme' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-mode', 'light')
+  await header.getByRole('button', { name: 'Switch to dark theme' }).click()
+  await expect(page.locator('html')).toHaveAttribute('data-mode', 'dark')
+
+  // Phones keep both in the top row, 44px square.
+  await page.setViewportSize({ width: 360, height: 740 })
+  const box = await github.boundingBox()
+  expect(box?.width).toBe(44)
+  expect(box?.height).toBe(44)
+})
+
+test('IBM Plex comes from this site, not Google Fonts', async ({ page, baseURL }) => {
+  /** @type {string[]} */
+  const fonts = []
+  page.on('request', (r) => { if (r.resourceType() === 'font') fonts.push(r.url()) })
+  await page.goto('/')
+  // Each family and weight the design uses loads.
+  const loaded = await page.evaluate(() => Promise.all(['Sans', 'Mono'].flatMap((f) => [400, 500, 600, 700].map((w) => document.fonts.load(`${w} 16px "IBM Plex ${f}"`, 'Aa1').then((faces) => faces.length)))))
+  expect(loaded).toEqual(Array(8).fill(1))
+  expect(fonts.length).toBeGreaterThan(0)
+  expect(fonts.every((u) => u.startsWith(String(baseURL)))).toBe(true)
+})
