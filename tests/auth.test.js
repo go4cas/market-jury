@@ -90,6 +90,36 @@ describe('Trade Master login', () => {
     expect(await session.json()).toEqual({ tradeMaster: false, galleryEnabled: false })
   })
 
+  test('the same password and code sent at once start exactly one session', async () => {
+    const used = code()
+    const results = await Promise.all(Array.from({ length: 8 }, () => login({ password: PASSWORD, code: used })))
+    expect(results.map((r) => r.status).filter((s) => s === 200)).toHaveLength(1)
+    // The others are reused codes, which count as wrong tries (enough of them lock the login).
+    expect(results.filter((r) => r.status !== 200).every((r) => r.status === 401 || r.status === 429)).toBe(true)
+    expect(t.db.query('SELECT COUNT(*) AS n FROM sessions').get()).toEqual({ n: 1 })
+  })
+
+  test('ten wrong tries sent at once all count, so login ends locked', async () => {
+    const results = await Promise.all(Array.from({ length: 10 }, () => login({ password: 'nope nope nope', code: code() })))
+    expect(results.some((r) => r.status === 429)).toBe(true)
+    const tm = /** @type {{ locked_until: string | null }} */ (t.db.query('SELECT locked_until FROM trade_master').get())
+    expect(Date.parse(tm.locked_until ?? '')).toBeGreaterThan(clock)
+    expect((await login({ password: PASSWORD, code: code() })).status).toBe(429)
+  })
+
+  test('a code that is not 6 digits or a very long password is refused before checking', async () => {
+    expect((await login({ password: PASSWORD, code: '12345' })).status).toBe(400)
+    expect((await login({ password: PASSWORD, code: '12a456' })).status).toBe(400)
+    expect((await login({ password: 'x'.repeat(1025), code: code() })).status).toBe(400)
+    expect(t.db.query('SELECT failed_attempts FROM trade_master').get()).toEqual({ failed_attempts: 0 })
+    expect((await login({ password: PASSWORD, code: code().replace(/(\d{3})/, '$1 ') })).status).toBe(200)
+  })
+
+  test('a body bigger than any form needs is refused without being read', async () => {
+    const res = await login({ password: 'x'.repeat(100_000), code: code() })
+    expect(res.status).toBe(413)
+  })
+
   test('says so when no Trade Master has been set up', async () => {
     t.db.run('DELETE FROM trade_master')
     expect((await login({ password: PASSWORD, code: '123456' })).status).toBe(503)
