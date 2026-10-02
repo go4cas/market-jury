@@ -14,19 +14,22 @@ export const MAX_ATTEMPTS = 4
 const MAX_WAIT_MS = 60_000
 
 /**
- * How long to wait before the next attempt: 2, 4, 8 seconds, or longer when a
- * provider's rate limit says when to come back (Google: "Please retry in 35.6s").
+ * How long to wait before the next attempt: 2, 4, 8 seconds for most failures.
+ * A busy or rate-limited provider (HTTP 429 or 5xx, such as Gemini's "high
+ * demand") gets 15, 30, 60 seconds, or longer when it says when to come back
+ * (Google: "Please retry in 35.6s"), up to a minute.
  * @param {unknown} e
  * @param {number} attempt the attempt that just failed, from 1
  * @returns {number} milliseconds
  */
 export function retryDelay(e, attempt) {
   const backoff = 2 ** attempt * 1000
-  if (!APICallError.isInstance(e) || e.statusCode !== 429) return backoff
+  if (!APICallError.isInstance(e) || !(e.statusCode === 429 || (e.statusCode ?? 0) >= 500)) return backoff
+  const patient = Math.min(MAX_WAIT_MS, 15_000 * 2 ** (attempt - 1))
   const header = Number(e.responseHeaders?.['retry-after'])
   const said = Number(/retry in ([\d.]+)\s*s/i.exec(e.message)?.[1])
   const seconds = Number.isFinite(header) && header > 0 ? header : Number.isFinite(said) && said > 0 ? said : 0
-  return Math.max(backoff, Math.min(MAX_WAIT_MS, Math.ceil(seconds) * 1000 + 1000))
+  return Math.max(patient, Math.min(MAX_WAIT_MS, Math.ceil(seconds) * 1000 + 1000))
 }
 
 /**
