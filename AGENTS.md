@@ -126,6 +126,10 @@ These are non-obvious constraints. Violating them causes silent bugs or runtime 
 - Steel blue (`brand`) is the only accent: primary buttons, active nav, focus ring, glossary underline. It never marks gains, losses or a Trader. `good`/`bad` only colour numbers and always come with ▲/▼ and a sign. BUY/SELL tags are never green or red. Each Trader keeps its colour for life (Claude trader-1, GPT trader-2, Gemini trader-3, DeepSeek trader-4); The Index is grey and dashed.
 - Write for someone new to trading: plain sentences first, the trading term after it as a glossary term. Name the cast by persona ("The Floor Runner couldn't build the briefing pack"), not by system part. Quote Traders' reasons verbatim. Sentence case, no emoji, no exclamation marks. No "AI" wordmark or badge on the logo.
 - Tailwind only emits theme colours whose full name appears in the source, so never build a token name at run time (`` `--color-trader-${n}` ``): use `colourOf()` in `utils/traders.js`, which spells them out. Otherwise Daylight loses the colour.
+- Interruptions are native `<dialog>`s via `components/Dialog.js` (`confirmDialog()` for a yes/no with the safe choice focused and the action named, `openDialog()` for a short form). Never `alert()`, `confirm()` or `prompt()`.
+- Explanations open in native popovers (`Term`, and `Hint` for a "?" next to a column head), never inline hints.
+- Long Trade Master pages fold into `Disclosure` sections (`components/Disclosure.js`): a heading button with `aria-expanded`, a one-line summary when closed, open state remembered per browser.
+- Every `<select>` uses the `mj-select` class; number boxes use `mj-input--num` with the unit outside the box (`mj-affix`).
 - Screens show data through `Loadable(request, view)`; glossary words through `Term(word, key)` (`utils/glossary.js`); Traders through `TraderMark`/`TraderName`; changes through `Delta` (arrow plus sign); value lines through `ValueChart` (uPlot).
 - Phone first: one column, 16px gutters, touch targets at least 44px (`min-h-11`). Respect `prefers-reduced-motion`; nothing blinks or auto-scrolls.
 

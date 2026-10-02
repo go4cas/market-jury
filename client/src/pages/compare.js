@@ -15,7 +15,7 @@ import { displayName, modelName } from '../utils/traders.js'
 
 export const meta = { layout: 'app', title: 'Compare · Market Jury' }
 
-const select = 'min-h-11 w-full rounded-control border border-line-strong bg-surface-inset px-3 font-mono text-sm text-fg'
+const select = 'mj-select w-full'
 const th = 'px-2 py-2 text-left font-mono text-xs font-medium uppercase tracking-wide text-fg-soft'
 const td = 'border-t border-line px-2 py-2.5 text-right font-mono text-sm text-fg'
 

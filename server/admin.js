@@ -1,7 +1,7 @@
 // Trade Master routes: start, pause and rehearse the experiment, watch the
 // scheduler, change settings and the line-up, and see costs. Every route
 // here, reads included, needs the Trade Master's session.
-import { marketDate, nextTradingDay, previousTradingDay } from '../core/calendar.js'
+import { marketDate, nextTradingDay, openInstant, previousTradingDay } from '../core/calendar.js'
 import { fromMicro, toMicro } from '../core/money.js'
 import { rulesFor } from '../core/portfolio.js'
 import { createTrader, retireTrader } from '../core/traders.js'
@@ -11,6 +11,7 @@ import { dryRun, firstDecisionDate, pauseExperiment, resumeExperiment, seedLineU
 import { openingBellDue, rerunStep, STEPS } from '../jobs/schedule.js'
 import { isTradeMaster } from './auth.js'
 import { error, json, readJson } from './http.js'
+import { dayNumber, latestDate } from './reads.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 /** @typedef {import('../jobs/schedule.js').StepContext} StepContext */
@@ -60,6 +61,8 @@ export function adminRoutes(ctx) {
           failedSteps: failed,
           recentSteps: recent,
           missingKeys: Object.values(KEY_NAMES).filter((k) => !process.env[k]),
+          day: dayNumber(db, latestDate(db) ?? marketDate(ctx.now())),
+          nextOpen: nextOpen(db, ctx.now()),
         })
       }),
     },
@@ -182,7 +185,8 @@ export function adminRoutes(ctx) {
       GET: guarded(() => {
         if (settings(db).experiment_state === 'setup') seedLineUp(db, ctx.now())
         return json({
-          traders: db.query(`SELECT t.id, t.name, t.kind, t.cadence, t.colour_slot, t.status, t.started_on, t.retired_on, m.provider, m.model_version, m.effort
+          traders: db.query(`SELECT t.id, t.name, t.kind, t.cadence, t.colour_slot, t.status, t.started_on, t.retired_on, m.provider, m.model_version, m.effort,
+                               (SELECT COUNT(*) FROM positions p WHERE p.trader_id = t.id AND p.quantity_micro > 0) AS positions
                              FROM traders t LEFT JOIN models m ON m.id = t.model_id ORDER BY t.kind = 'benchmark', t.id`).all(),
         })
       }),
@@ -297,4 +301,17 @@ function setGuardrails(db, changes, now) {
   db.transaction(() => {
     for (const id of traders) upsert.run(id, JSON.stringify({ ...rulesFor(db, id, from), ...changes }), from)
   })()
+}
+
+/**
+ * The next official open after an instant (today's, if it hasn't happened yet).
+ * @param {import('bun:sqlite').Database} db
+ * @param {Date} now
+ */
+function nextOpen(db, now) {
+  const today = marketDate(now)
+  const open = openInstant(db, today)
+  if (open && open > now) return open.toISOString()
+  const next = nextTradingDay(db, today)
+  return next ? openInstant(db, next)?.toISOString() ?? null : null
 }

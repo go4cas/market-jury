@@ -65,7 +65,7 @@ function PeriodPicker(s, ui) {
   if (ends.length < 2) return ''
   return html`<label class="flex flex-col gap-1.5 sm:max-w-xs">
     <span class="prompt">${s.kind === 'week' ? 'Pick a week' : 'Pick a month'}</span>
-    <select class="min-h-11 rounded-control border border-line-strong bg-surface-inset px-3 font-mono text-sm text-fg" @change="${/** @param {Event} e */ (e) => { ui.end = /** @type {HTMLSelectElement} */ (e.target).value }}">
+    <select class="mj-select" @change="${/** @param {Event} e */ (e) => { ui.end = /** @type {HTMLSelectElement} */ (e.target).value }}">
       ${ends.map((/** @type {string} */ end) => html`<option value="${end}" selected="${end === s.end ? true : false}">${s.kind === 'week' ? `Week ending ${day(end)}` : monthName(end)}</option>`)}
     </select>
   </label>`

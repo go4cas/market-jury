@@ -109,10 +109,26 @@ test('the Columnist lists recaps and the weekly report', async ({ page }) => {
   await expect(page.getByTestId('column')).toHaveCount(1)
 })
 
+/**
+ * Open a collapsed Settings section (sections remember being open, so only click a closed one).
+ * @param {import('@playwright/test').Page} page
+ * @param {string} title
+ */
+async function openSection(page, title) {
+  const button = page.getByRole('button', { name: new RegExp(`^${title}`) })
+  if ((await button.getAttribute('aria-expanded')) !== 'true') await button.click()
+  await expect(button).toHaveAttribute('aria-expanded', 'true')
+}
+
 test('the Trade Master screens: settings, costs and the briefing pack', async ({ page }) => {
   await page.goto('/admin/settings')
   await expect(page.getByTestId('experiment-state')).toHaveText('Running')
+  await expect(page.getByRole('heading', { name: 'Running · Day 3 of 63' })).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible()
+  // The line-up is open to begin with; the other sections fold away.
   await expect(page.getByRole('button', { name: 'Retire' })).toHaveCount(8)
+  await expect(page.getByRole('searchbox', { name: /Find a ticker/ })).toBeHidden()
+  await openSection(page, 'Stock list')
   await page.getByRole('searchbox', { name: /Find a ticker/ }).fill('nv')
   await expect(page.getByText('Nvidia')).toBeVisible()
   await expect(page.getByText('Apple Inc.')).toHaveCount(0)
@@ -136,6 +152,8 @@ test('a dry run shows each Trader\'s answer with its orders and verdicts', async
   }
   await page.route('**/api/admin/dry-run', (route) => route.fulfill({ json: { running: false, finishedAt: '2026-11-24T22:00:00Z', result, error: null } }))
   await page.goto('/admin/settings')
+  await expect(page.getByText(/Last dry run .* · 2 Traders · \$0\.00/)).toBeVisible()
+  await page.getByRole('button', { name: 'See result' }).click()
   await expect(page.getByText('You exceeded your current quota.')).toBeVisible()
   await page.getByText('answered with 1 order').click()
   await expect(page.getByText('Large caps drifted higher.')).toBeVisible()
@@ -146,6 +164,7 @@ test('a dry run shows each Trader\'s answer with its orders and verdicts', async
 
 test('a visitor reads the Gallery once the Trade Master opens it, but not the Trade Master screens', async ({ page, browser, baseURL }) => {
   await page.goto('/admin/settings')
+  await openSection(page, 'Rules and budget')
   await page.getByRole('checkbox', { name: /Open the Gallery/ }).check()
   await page.getByRole('button', { name: 'Save settings' }).click()
   await expect(page.getByText('Settings saved.')).toBeVisible()
@@ -161,6 +180,7 @@ test('a visitor reads the Gallery once the Trade Master opens it, but not the Tr
 
   // Close it again for the other tests.
   await page.reload()
+  await openSection(page, 'Rules and budget')
   await page.getByRole('checkbox', { name: /Open the Gallery/ }).uncheck()
   await page.getByRole('button', { name: 'Save settings' }).click()
   await expect(page.getByText('Settings saved.')).toBeVisible()
@@ -193,6 +213,8 @@ test('the home page opens with the hero: live stats, the jury box and the market
 
 test('Settings lists every stock in a scrolling box, with short boxes for numbers', async ({ page }) => {
   await page.goto('/admin/settings')
+  await openSection(page, 'Stock list')
+  await openSection(page, 'Rules and budget')
   const list = page.getByRole('list', { name: 'Stocks and funds' })
   await expect(list.getByRole('listitem').first()).toBeVisible()
   // Every stock is listed (no cut-off); a long list scrolls inside its box.
@@ -201,6 +223,27 @@ test('Settings lists every stock in a scrolling box, with short boxes for number
   expect(await list.evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto')
   const budget = await page.getByRole('spinbutton', { name: /Monthly budget/ }).boundingBox()
   expect(budget?.width).toBeLessThan(200)
+})
+
+test('Retire and Add a Trader open dialogs, not browser pop-ups', async ({ page }) => {
+  page.on('dialog', () => { throw new Error('A browser pop-up opened') })
+  await page.goto('/admin/settings')
+  await page.getByRole('button', { name: 'Retire' }).first().click()
+  const retire = page.getByRole('dialog', { name: /^Retire / })
+  await expect(retire).toContainText("at the next open")
+  await expect(retire).toContainText("This can't be undone.")
+  await expect(retire.getByRole('button', { name: /^Keep / })).toBeFocused()
+  await retire.getByRole('button', { name: /^Keep / }).click()
+  await expect(retire).toHaveCount(0)
+  await expect(page.getByRole('button', { name: 'Retire' })).toHaveCount(8)
+
+  await page.getByRole('button', { name: 'Add a Trader' }).click()
+  const add = page.getByRole('dialog', { name: 'Add a Trader' })
+  await expect(add.getByRole('button', { name: 'Add the Trader' })).toHaveAttribute('aria-disabled', 'true')
+  await add.getByRole('button', { name: 'Add the Trader' }).click({ force: true })
+  await expect(add.getByText(/fill (in|out) this field/i).first()).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(add).toHaveCount(0)
 })
 
 test('the Overview clock shows New York and the reader\'s own time zone', async ({ browser, baseURL }) => {
