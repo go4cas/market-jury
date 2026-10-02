@@ -183,10 +183,12 @@ describe('waiting between attempts', () => {
     expect([1, 2, 3].map((a) => retryDelay(new Error('boom'), a))).toEqual([2000, 4000, 8000])
   })
 
-  test('waits as long as a rate limit asks, within a minute', () => {
+  test('waits longer when a provider is busy, and as long as it asks, within a minute', () => {
     expect(retryDelay(rateLimited('Quota exceeded. Please retry in 35.611273007s.'), 1)).toBe(37_000)
     expect(retryDelay(rateLimited('Too many requests', { 'retry-after': '20' }), 1)).toBe(21_000)
     expect(retryDelay(rateLimited('Please retry in 600s.'), 1)).toBe(60_000)
-    expect(retryDelay(rateLimited('Slow down'), 3)).toBe(8000)
+    expect([1, 2, 3].map((a) => retryDelay(rateLimited('Slow down'), a))).toEqual([15_000, 30_000, 60_000])
+    const busy = new APICallError({ message: 'This model is currently experiencing high demand.', url: 'https://example.test', requestBodyValues: {}, statusCode: 503 })
+    expect([1, 2, 3].map((a) => retryDelay(busy, a))).toEqual([15_000, 30_000, 60_000])
   })
 })
