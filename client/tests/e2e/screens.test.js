@@ -108,6 +108,25 @@ test('the Trade Master screens: settings, costs and the briefing pack', async ({
   await expect(page.getByRole('cell', { name: 'SPY', exact: true })).toBeVisible()
 })
 
+test('a dry run shows each Trader\'s answer with its orders and verdicts', async ({ page }) => {
+  const order = { side: 'buy', ticker: 'AAPL', amountMicro: 300_000_000, sellAll: 0, reason: 'Steady gains; a core holding.', verdict: 'trimmed', note: 'Cut to the 20% position cap.', approvedAmountMicro: 200_000_000 }
+  const result = {
+    packDate: '2026-11-24',
+    results: [
+      { traderId: 1, trader: 'Claude · Daily', ok: true, error: null, costMicro: 1, verdicts: [{}], marketView: 'Large caps drifted higher.', noTradesReason: null, orders: [order] },
+      { traderId: 2, trader: 'Gemini · Weekly', ok: false, error: 'You exceeded your current quota.', costMicro: 0, verdicts: [], marketView: null, noTradesReason: null, orders: [] },
+    ],
+  }
+  await page.route('**/api/admin/dry-run', (route) => route.fulfill({ json: { running: false, finishedAt: '2026-11-24T22:00:00Z', result, error: null } }))
+  await page.goto('/admin/settings')
+  await expect(page.getByText('You exceeded your current quota.')).toBeVisible()
+  await page.getByText('answered with 1 order').click()
+  await expect(page.getByText('Large caps drifted higher.')).toBeVisible()
+  await expect(page.getByText('BUY AAPL $300.00')).toBeVisible()
+  await expect(page.getByText('trimmed to fit the rules to $200.00')).toBeVisible()
+  await expect(page.getByText('"Steady gains; a core holding."')).toBeVisible()
+})
+
 test('a visitor reads the Gallery once the Trade Master opens it, but not the Trade Master screens', async ({ page, browser, baseURL }) => {
   await page.goto('/admin/settings')
   await page.getByRole('checkbox', { name: /Open the Gallery/ }).check()

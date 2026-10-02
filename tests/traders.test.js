@@ -1,4 +1,6 @@
 import { beforeEach, describe, expect, test } from 'bun:test'
+import { APICallError } from 'ai'
+import { retryDelay } from '../agents/call.js'
 import { budget, mayRun } from '../agents/budget.js'
 import { writeColumn } from '../agents/columnist.js'
 import { costOf, ensureColumnistModels, languageModel, modelRow } from '../agents/models.js'
@@ -170,5 +172,21 @@ describe('models and the budget guard', () => {
     const over = budget(db, tenth)
     expect(over.level).toBe('over')
     expect(['daily trader', 'weekly trader', 'daily recap', 'weekly report'].filter((k) => mayRun(over, /** @type {any} */ (k)))).toEqual(['daily trader', 'weekly report'])
+  })
+})
+
+describe('waiting between attempts', () => {
+  /** @param {string} message @param {Record<string, string>} [headers] */
+  const rateLimited = (message, headers = {}) => new APICallError({ message, url: 'https://example.test', requestBodyValues: {}, statusCode: 429, responseHeaders: headers })
+
+  test('backs off 2, 4 and 8 seconds on ordinary failures', () => {
+    expect([1, 2, 3].map((a) => retryDelay(new Error('boom'), a))).toEqual([2000, 4000, 8000])
+  })
+
+  test('waits as long as a rate limit asks, within a minute', () => {
+    expect(retryDelay(rateLimited('Quota exceeded. Please retry in 35.611273007s.'), 1)).toBe(37_000)
+    expect(retryDelay(rateLimited('Too many requests', { 'retry-after': '20' }), 1)).toBe(21_000)
+    expect(retryDelay(rateLimited('Please retry in 600s.'), 1)).toBe(60_000)
+    expect(retryDelay(rateLimited('Slow down'), 3)).toBe(8000)
   })
 })

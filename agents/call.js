@@ -2,13 +2,32 @@
 // prompt, raw response, tokens and cost. A failed call is retried up to 3
 // times; an answer that doesn't match the schema gets one repair attempt
 // (counted as one of those retries). The answer is parsed, never executed.
-import { generateText, isStepCount, NoObjectGeneratedError, Output } from 'ai'
+import { APICallError, generateText, isStepCount, NoObjectGeneratedError, Output } from 'ai'
 import { costOf, reasoningFor } from './models.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 /** @typedef {import('ai').ModelMessage} ModelMessage */
 
 export const MAX_ATTEMPTS = 4
+
+/** The longest a provider may ask us to wait before the next attempt. */
+const MAX_WAIT_MS = 60_000
+
+/**
+ * How long to wait before the next attempt: 2, 4, 8 seconds, or longer when a
+ * provider's rate limit says when to come back (Google: "Please retry in 35.6s").
+ * @param {unknown} e
+ * @param {number} attempt the attempt that just failed, from 1
+ * @returns {number} milliseconds
+ */
+export function retryDelay(e, attempt) {
+  const backoff = 2 ** attempt * 1000
+  if (!APICallError.isInstance(e) || e.statusCode !== 429) return backoff
+  const header = Number(e.responseHeaders?.['retry-after'])
+  const said = Number(/retry in ([\d.]+)\s*s/i.exec(e.message)?.[1])
+  const seconds = Number.isFinite(header) && header > 0 ? header : Number.isFinite(said) && said > 0 ? said : 0
+  return Math.max(backoff, Math.min(MAX_WAIT_MS, Math.ceil(seconds) * 1000 + 1000))
+}
 
 /**
  * @template T
@@ -79,7 +98,7 @@ export async function callModel(o) {
       } else {
         costMicro += finish(db, runId, model, undefined, { status: 'failed', response: null, error, now })
       }
-      if (attempt < MAX_ATTEMPTS) await sleep(2 ** attempt * 1000)
+      if (attempt < MAX_ATTEMPTS) await sleep(retryDelay(e, attempt))
     }
   }
   return { ok: false, error, runId, costMicro }

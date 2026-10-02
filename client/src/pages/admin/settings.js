@@ -9,7 +9,7 @@ import { stepName } from '../../components/TradeMasterNotice.js'
 import { Term } from '../../components/Term.js'
 import { TraderName } from '../../components/TraderMark.js'
 import { send } from '../../utils/api.js'
-import { day } from '../../utils/format.js'
+import { day, usd } from '../../utils/format.js'
 
 export const meta = { layout: 'app', title: 'Settings · Market Jury' }
 
@@ -20,6 +20,26 @@ const primary = 'inline-flex min-h-11 items-center justify-center rounded-contro
 const secondary = 'inline-flex min-h-11 items-center justify-center rounded-control border border-line-strong px-4 font-mono text-sm font-semibold text-fg hover:bg-surface-inset'
 
 const STATES = /** @type {Record<string, string>} */ ({ setup: 'Being set up', running: 'Running', paused: 'Paused', ended: 'Ended' })
+
+const VERDICTS = /** @type {Record<string, string>} */ ({ accepted: 'accepted', trimmed: 'trimmed to fit the rules', rejected: 'turned down' })
+
+/**
+ * One Trader's dry-run answer, folded away until the Trade Master opens it:
+ * its view of the market, then each order with its reason and the Compliance Desk's verdict.
+ * @param {any} x a dry-run result
+ */
+const DryRunAnswer = (x) => html`<details>
+  <summary class="min-h-11 cursor-pointer py-2"><span class="font-semibold">${x.trader}</span>: answered with ${x.orders.length} ${x.orders.length === 1 ? 'order' : 'orders'}</summary>
+  <div class="mb-2 flex flex-col gap-2 border-l border-line pl-3">
+    ${x.marketView ? html`<p class="max-w-prose text-fg-soft">${x.marketView}</p>` : ''}
+    ${x.orders.length ? html`<ul class="flex flex-col gap-2">${x.orders.map((/** @type {any} */ o) => html`<li>
+      <span class="font-mono">${String(o.side).toUpperCase()} ${o.ticker} ${o.sellAll ? 'all' : usd(o.amountMicro)}</span>
+      <span class="text-fg-soft"> · ${VERDICTS[o.verdict] ?? o.verdict}${o.verdict === 'trimmed' && o.approvedAmountMicro !== null ? ` to ${usd(o.approvedAmountMicro)}` : ''}</span>
+      <span class="block max-w-prose text-fg-soft">"${o.reason}"</span>
+      ${o.note ? html`<span class="block max-w-prose text-fg-faint">${o.note}</span>` : ''}
+    </li>`)}</ul>` : html`<p class="max-w-prose text-fg-soft">No trades: "${x.noTradesReason ?? ''}"</p>`}
+  </div>
+</details>`
 
 /** @param {HTMLFormElement} form */
 const formValues = (form) => Object.fromEntries(new FormData(form).entries())
@@ -84,7 +104,7 @@ function SettingsPage() {
               rehearsal.refetch()
             }}">${r?.running ? 'Dry run going…' : 'Run a dry run'}</button></div>
             ${r?.error ? Banner(r.error) : ''}
-            ${r?.result ? html`<p class="prompt">Briefing pack of ${day(r.result.packDate)}</p><ul class="flex flex-col gap-1.5">${r.result.results.map((/** @type {any} */ x) => html`<li class="text-sm text-fg"><span class="font-semibold">${x.trader}</span>: ${x.ok ? `answered with ${x.verdicts.length} ${x.verdicts.length === 1 ? 'order' : 'orders'}` : html`<span class="text-bad">${x.error}</span>`}</li>`)}</ul>` : ''}
+            ${r?.result ? html`<p class="prompt">Briefing pack of ${day(r.result.packDate)}</p><ul class="flex flex-col gap-1.5">${r.result.results.map((/** @type {any} */ x) => html`<li class="text-sm text-fg">${x.ok ? DryRunAnswer(x) : html`<span class="font-semibold">${x.trader}</span>: <span class="text-bad">${x.error}</span>`}</li>`)}</ul>` : ''}
           `)
         }}
       </section>
