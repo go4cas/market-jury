@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatClock, formatDateline, NY_TIME_ZONE, SA_TIME_ZONE, viewerTimeZone, zoneLabel } from '../../src/utils/time.js'
+import { formatClock, formatDateline, howLong, NY_TIME_ZONE, SA_TIME_ZONE, viewerTimeZone, zoneLabel } from '../../src/utils/time.js'
 
 describe('time formatting', () => {
   // 14 Oct 2026 13:41 UTC: New York is on summer time (UTC-4), South Africa is UTC+2.
@@ -37,5 +37,13 @@ describe('time formatting', () => {
 
   it('reads the viewer\'s own time zone from the browser', () => {
     expect(viewerTimeZone()).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
+  })
+
+  it('says how long something took, in plain minutes and seconds', () => {
+    expect(howLong('2026-10-02T08:00:00Z', '2026-10-02T08:02:14Z')).toBe('2m 14s')
+    expect(howLong('2026-10-02T08:00:00Z', '2026-10-02T08:00:42.600Z')).toBe('43s')
+    expect(howLong('2026-10-02T08:00:00Z', '2026-10-02T08:05:00Z')).toBe('5m')
+    expect(howLong('2026-10-02T08:00:00Z', '2026-10-02T09:12:30Z')).toBe('1h 12m')
+    expect(howLong(null, '2026-10-02T08:05:00Z')).toBe('')
   })
 })

@@ -163,9 +163,9 @@ test('a dry run shows each Trader\'s answer with its orders and verdicts', async
       { traderId: 2, trader: 'Gemini · Weekly', ok: false, error: 'You exceeded your current quota.', costMicro: 0, verdicts: [], marketView: null, noTradesReason: null, orders: [] },
     ],
   }
-  await page.route('**/api/admin/dry-run', (route) => route.fulfill({ json: { running: false, finishedAt: '2026-11-24T22:00:00Z', result, error: null } }))
+  await page.route('**/api/admin/dry-run', (route) => route.fulfill({ json: { running: false, startedAt: '2026-11-24T21:57:46Z', finishedAt: '2026-11-24T22:00:00Z', result, error: null } }))
   await page.goto('/admin/settings')
-  await expect(page.getByText(/Last dry run .* · 2 Traders · \$0\.00/)).toBeVisible()
+  await expect(page.getByText(/Last dry run .* · 2 Traders · 2m 14s · \$0\.00/)).toBeVisible()
   await page.getByRole('button', { name: 'See result' }).click()
   await expect(page.getByText('You exceeded your current quota.')).toBeVisible()
   await page.getByText('answered with 1 order').click()

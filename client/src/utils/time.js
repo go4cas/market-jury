@@ -41,3 +41,17 @@ export function zoneLabel(date, timeZone) {
   const names = ZONE_LOCALES.map(name)
   return names.find((n) => /^[A-Z]{2,5}$/.test(n) && n !== 'GMT') ?? names.find((n) => n === 'GMT') ?? names[0]
 }
+
+/**
+ * "2m 14s", "43s", "1h 12m": how long something ran; '' when a time is missing.
+ * @param {string | null | undefined} from ISO start
+ * @param {string | null | undefined} to ISO end
+ */
+export function howLong(from, to) {
+  if (!from || !to) return ''
+  const s = Math.max(0, Math.round((Date.parse(to) - Date.parse(from)) / 1000))
+  const h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60
+  if (h) return m ? `${h}h ${m}m` : `${h}h`
+  if (m) return sec ? `${m}m ${sec}s` : `${m}m`
+  return `${sec}s`
+}
