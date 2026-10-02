@@ -37,25 +37,24 @@ export function useForm(initialValues = {}, { onSubmit, validate } = {}) {
     // Guard the async validate window too — submitting goes true before any await.
     form.submitting = true
 
-    if (validate) {
-      // validate may be sync or async — await handles both.
-      const errs = await validate(form.values)
-      if (errs && Object.keys(errs).length) {
-        form.errors = errs
-        form.submitting = false
-        return
-      }
-    }
-
-    form.errors = {}
-
     try {
+      if (validate) {
+        // validate may be sync or async — await handles both. A throwing
+        // validator lands in the catch below, so submitting always resets.
+        const errs = await validate(form.values)
+        if (errs && Object.keys(errs).length) {
+          form.errors = errs
+          return
+        }
+      }
+
+      form.errors = {}
       if (onSubmit) await onSubmit(form.values, form)
       if (!Object.keys(form.errors).length) form.submitted = true
     } catch (err) {
       // @submit handlers discard the returned promise, so a throwing
-      // onSubmit would otherwise become an unhandled rejection with no
-      // UI feedback — surface it as the form's status message instead.
+      // validate or onSubmit would otherwise become an unhandled rejection
+      // with no UI feedback — surface it as the form's status message instead.
       form.message = err instanceof Error ? err.message : String(err)
     } finally {
       form.submitting = false
