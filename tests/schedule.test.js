@@ -171,6 +171,10 @@ describe('the dry run', () => {
     expect(r.packDate).toBe('2026-11-24')
     expect(r.results).toHaveLength(8)
     expect(r.results.every((x) => x.ok && x.verdicts.length === 2)).toBe(true)
+    // The Trade Master can read each answer: the market view and every order with its reason and verdict.
+    expect(r.results[0].marketView).toBe(traderAnswer.market_view)
+    expect(r.results[0].orders.map((o) => [o.side, o.ticker, o.reason, o.verdict])).toEqual(
+      traderAnswer.orders.map((/** @type {any} */ o, /** @type {number} */ i) => [o.side, o.ticker, o.reason, r.results[0].verdicts[i].verdict]))
     expect(db.query("SELECT DISTINCT status FROM orders").values().flat()).toEqual(['dry_run'])
     expect(db.query('SELECT DISTINCT dry_run FROM runs').values().flat()).toEqual([1])
     expect(db.query('SELECT COUNT(*) AS n FROM traders WHERE started_on IS NULL').get()).toEqual({ n: 8 })

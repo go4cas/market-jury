@@ -170,7 +170,13 @@ export async function dryRun({ db, now, alpaca, menu, languageModel, generate, s
   for (const t of traders) {
     const packId = t.cadence === 'weekly' ? weekly.id : daily.id
     const r = await runTrader({ db, traderId: t.id, packId, dryRun: true, now, languageModel, generate, sleep })
-    results.push({ traderId: t.id, trader: t.name, ok: r.ok, error: r.error ?? null, costMicro: r.costMicro, verdicts: r.verdicts })
+    // What the Trade Master reads: the Trader's own words and each order with the Compliance Desk's verdict.
+    const decision = /** @type {{ market_view: string, no_trades_reason: string | null } | null} */ (
+      r.ok ? db.query('SELECT market_view, no_trades_reason FROM decisions WHERE run_id = ?').get(r.runId) : null)
+    const orders = db.query(`SELECT side, ticker, amount_micro AS amountMicro, sell_all AS sellAll, reason, verdict, verdict_note AS note, approved_amount_micro AS approvedAmountMicro
+                             FROM orders WHERE run_id = ? ORDER BY id`).all(r.runId)
+    results.push({ traderId: t.id, trader: t.name, ok: r.ok, error: r.error ?? null, costMicro: r.costMicro, verdicts: r.verdicts,
+      marketView: decision?.market_view ?? null, noTradesReason: decision?.no_trades_reason ?? null, orders })
   }
   return { packDate: daily.trading_date, results }
 }
