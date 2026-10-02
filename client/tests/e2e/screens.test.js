@@ -192,6 +192,14 @@ test('The cast explains who does what, with the live line-up linked to each Trad
   await expect(page).toHaveURL('/cast')
   await expect(page.getByRole('heading', { name: 'The cast', level: 1 })).toBeVisible()
   await expect(page.locator('#compliance-desk')).toContainText('When · after the Traders decide')
+  // Three rows: The Traders, the daily cycle in order (Step 1 to 4), then the rest;
+  // the cards in a row are the same height.
+  await expect(page.locator('section[aria-labelledby="daily-cycle"] article h3')).toHaveText(['Floor Runner', 'Compliance Desk', 'Opening Bell', 'Market Columnist'])
+  await expect(page.locator('#floor-runner')).toContainText('Step 1')
+  for (const row of ['daily-cycle', 'around']) {
+    const heights = await page.locator(`section[aria-labelledby="${row}"] article`).evaluateAll((cards) => cards.map((c) => c.getBoundingClientRect().height))
+    expect(new Set(heights).size).toBe(1)
+  }
   // The icons are drawn as real SVG shapes, so they take up room on the page.
   const shape = await page.getByRole('main').locator('svg path').first().boundingBox()
   expect(shape?.width).toBeGreaterThan(0)
@@ -207,6 +215,8 @@ test('the home page opens with the hero: live stats, the jury box and the market
   await expect(page.getByRole('img', { name: /^Daily Traders now: Claude \$1,0\d\d, GPT .*; The Index \$1,0\d\d$/ })).toBeVisible()
   // The seeded clock is past Friday's close, so the market is closed until Monday's open.
   await expect(page.getByRole('status').filter({ hasText: 'Market closed' })).toContainText(/opens \w{3} 09:30 NY|holiday/)
+  // Closed is red and open is green, as Cas asked.
+  await expect(page.getByRole('status').filter({ hasText: 'Market closed' })).toHaveClass(/text-bad/)
   await page.getByRole('button', { name: 'See who is ahead' }).click()
   await expect(page.getByRole('heading', { name: 'Who is ahead' })).toBeInViewport()
 })
