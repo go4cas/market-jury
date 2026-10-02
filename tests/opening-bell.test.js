@@ -3,7 +3,9 @@ import { checkBooks } from '../core/books.js'
 import { checkOrders } from '../core/complianceDesk.js'
 import { ringOpeningBell } from '../core/openingBell.js'
 import { toMicro } from '../core/money.js'
-import { cashOf, positionsOf } from '../core/portfolio.js'
+import { cashOf, closeOn, positionsOf } from '../core/portfolio.js'
+import { PARTIAL_BAR, saveBars, saveCorporateActions } from '../market/store.js'
+import { replay } from '../core/books.js'
 import { retireTrader } from '../core/traders.js'
 import { aTrader, anIndex, buy, instrumentId, NOW, sell, setPrices, tradingDb } from './trading-fixture.js'
 
@@ -163,5 +165,39 @@ describe('Opening Bell', () => {
     expect(checkBooks(db)).toEqual([])
     db.run("UPDATE positions SET quantity_micro = quantity_micro + 1 WHERE instrument_id = ?", [instrumentId(db, 'AAPL')])
     expect(checkBooks(db)).toHaveLength(1)
+  })
+})
+
+describe('Opening Bell, edge cases from the code review', () => {
+  test('a trading cost bigger than the cash a sale leaves is cut, so cash never goes below zero', () => {
+    const t = aTrader(db, { cash: 200, rules: { position_cap_pct: 100 } })
+    decide(t, MON, [buy('AAPL', 200)])
+    bell(TUE)
+    db.run('UPDATE rule_sets SET rules = json_set(rules, \'$.per_trade_cost_micro\', ?) WHERE trader_id = ?', [toMicro(2000), t])
+    const [v] = decide(t, TUE, [sell('AAPL', 'all')])
+    bell(WED)
+    expect(cashOf(db, t)).toBe(0)
+    expect(order(v.orderId).fill_note).toContain('trading cost was cut')
+    expect(checkBooks(db)).toEqual([])
+  })
+
+  test('a bar saved at the open is not taken as the close', () => {
+    saveBars(db, [{ ticker: 'AAPL', date: THU, openMicro: toMicro(111), highMicro: toMicro(111), lowMicro: toMicro(111), closeMicro: toMicro(111), volume: 1 }], PARTIAL_BAR)
+    expect(closeOn(db, instrumentId(db, 'AAPL'), THU)).toBe(toMicro(200))
+    // Nonsense prices are not stored at all.
+    saveBars(db, [{ ticker: 'MSFT', date: '2026-11-06', openMicro: 0, highMicro: NaN, lowMicro: -1, closeMicro: Infinity, volume: 1 }], 'alpaca')
+    expect(db.query("SELECT COUNT(*) AS n FROM daily_bars WHERE date = '2026-11-06'").get()).toEqual({ n: 0 })
+  })
+
+  test('once a split is booked, a revised ratio from the provider no longer changes it', () => {
+    const t = aTrader(db)
+    decide(t, MON, [buy('NVDA', 200)])
+    bell(TUE)
+    const split = (/** @type {number} */ to) => saveCorporateActions(db, [{ ticker: 'NVDA', kind: 'split', exDate: WED, payDate: null, splitFrom: 1, splitTo: to, cashPerShareMicro: null }])
+    split(2)
+    bell(WED)
+    split(3)
+    expect(replay(db, t).lots.get(instrumentId(db, 'NVDA'))?.quantity_micro).toBe(held(t).NVDA)
+    expect(checkBooks(db)).toEqual([])
   })
 })

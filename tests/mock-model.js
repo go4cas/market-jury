@@ -7,9 +7,9 @@ import { MockLanguageModelV4 } from 'ai/test'
 
 /**
  * @param {Reply[]} replies
- * @param {{ input?: number, cached?: number, output?: number }} [tokens] per call
+ * @param {{ input?: number, cached?: number, written?: number, output?: number }} [tokens] per call (written: tokens written to the prompt cache)
  */
-export function mockModel(replies, { input = 1000, cached = 0, output = 200 } = {}) {
+export function mockModel(replies, { input = 1000, cached = 0, written = undefined, output = 200 } = {}) {
   let i = 0
   /** @type {any[]} */
   const calls = []
@@ -19,7 +19,7 @@ export function mockModel(replies, { input = 1000, cached = 0, output = 200 } = 
       const reply = replies[Math.min(i++, replies.length - 1)]
       if ('error' in reply) throw new Error(reply.error)
       const usage = {
-        inputTokens: { total: input, noCache: input - cached, cacheRead: cached, cacheWrite: undefined },
+        inputTokens: { total: input, noCache: input - cached - (written ?? 0), cacheRead: cached, cacheWrite: written },
         outputTokens: { total: output, text: output, reasoning: undefined },
       }
       if ('toolCalls' in reply) {

@@ -7,6 +7,10 @@ import { marketDate } from '../core/calendar.js'
 
 const SYMBOLS_PER_REQUEST = 100
 const ATTEMPTS = 3
+/** One request may take this long before it is given up (and tried again). */
+const REQUEST_TIMEOUT_MS = 30_000
+/** Pages followed for one question at most; a real answer needs far fewer. */
+const MAX_PAGES = 500
 
 /**
  * @typedef {object} Bar
@@ -76,7 +80,7 @@ export function createAlpaca({
     let lastProblem = ''
     for (let attempt = 1; attempt <= ATTEMPTS; attempt++) {
       try {
-        const res = await fetch(url, { headers })
+        const res = await fetch(url, { headers, signal: AbortSignal.timeout(REQUEST_TIMEOUT_MS) })
         if (res.ok) return await res.json()
         lastProblem = `HTTP ${res.status}`
         if (res.status !== 429 && res.status < 500) break
@@ -98,10 +102,13 @@ export function createAlpaca({
     /** @type {T[]} */
     const out = []
     let token
+    const seen = new Set()
     do {
       const { items, next } = await page(token)
       out.push(...items)
       token = next ?? undefined
+      if (token && (seen.has(token) || seen.size >= MAX_PAGES)) throw new Error('Alpaca kept sending more pages than a day of data needs, so the request was stopped.')
+      if (token) seen.add(token)
     } while (token && out.length < max)
     return out.slice(0, max)
   }

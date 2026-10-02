@@ -4,7 +4,7 @@
 import { createHash } from 'node:crypto'
 import { fromMicro, percentChange } from '../core/money.js'
 import { closeInstant, firstTradingDayOfWeek, previousTradingDay, tradingDaysBack } from '../core/calendar.js'
-import { trackedInstruments } from './store.js'
+import { PARTIAL_BAR, trackedInstruments } from './store.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 
@@ -89,7 +89,7 @@ function priceRows(db, start, date, previousClose) {
   const period = db.prepare(`SELECT
       (SELECT open_micro FROM daily_bars WHERE instrument_id = ?1 AND date BETWEEN ?2 AND ?3 ORDER BY date LIMIT 1) AS open_micro,
       MAX(high_micro) AS high_micro, MIN(low_micro) AS low_micro,
-      (SELECT close_micro FROM daily_bars WHERE instrument_id = ?1 AND date = ?3) AS close_micro,
+      (SELECT close_micro FROM daily_bars WHERE instrument_id = ?1 AND date = ?3 AND source <> '${PARTIAL_BAR}') AS close_micro,
       SUM(volume) AS volume, COUNT(*) AS days
     FROM daily_bars WHERE instrument_id = ?1 AND date BETWEEN ?2 AND ?3`)
   const back = Object.fromEntries(Object.entries(HORIZONS).map(([key, n]) => [key, tradingDaysBack(db, date, n)]))

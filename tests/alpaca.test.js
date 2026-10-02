@@ -98,3 +98,11 @@ describe('Alpaca client', () => {
     await expect(alpaca.calendar('2026-11-01', '2026-11-30')).rejects.toThrow('ALPACA_KEY_ID')
   })
 })
+
+describe('a misbehaving answer', () => {
+  test('a page token that repeats stops the request instead of looping', async () => {
+    const fetch = async () => Response.json({ bars: { AAPL: [] }, next_page_token: 'same' })
+    const alpaca = createAlpaca({ keyId: 'k', secretKey: 's', fetch, sleep: async () => {} })
+    await expect(alpaca.dailyBars(['AAPL'], '2026-11-25', '2026-11-25')).rejects.toThrow('more pages')
+  })
+})

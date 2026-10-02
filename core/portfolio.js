@@ -79,7 +79,8 @@ export function openOn(db, instrumentId, date) {
 }
 
 /**
- * The latest close on or before `date` (a halted stock keeps its last price).
+ * The latest final close on or before `date` (a halted stock keeps its last
+ * price). A bar saved at the open has no final close yet, so it is passed over.
  * @param {Database} db
  * @param {number} instrumentId
  * @param {string} date
@@ -87,7 +88,7 @@ export function openOn(db, instrumentId, date) {
  */
 export function closeOn(db, instrumentId, date) {
   const row = /** @type {{ close_micro: number } | null} */ (
-    db.query('SELECT close_micro FROM daily_bars WHERE instrument_id = ? AND date <= ? ORDER BY date DESC LIMIT 1').get(instrumentId, date)
+    db.query("SELECT close_micro FROM daily_bars WHERE instrument_id = ? AND date <= ? AND source <> 'alpaca-open' ORDER BY date DESC LIMIT 1").get(instrumentId, date)
   )
   return row?.close_micro ?? null
 }

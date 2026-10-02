@@ -12,6 +12,8 @@ export const MAX_ATTEMPTS = 4
 
 /** The longest a provider may ask us to wait before the next attempt. */
 const MAX_WAIT_MS = 60_000
+/** One attempt, lookups included, may take this long before it is stopped and counted as failed. */
+export const ATTEMPT_TIMEOUT_MS = 5 * 60_000
 
 /**
  * How long to wait before the next attempt: 2, 4, 8 seconds for most failures.
@@ -71,6 +73,11 @@ export async function callModel(o) {
                 VALUES (?, ?, ?, ?, ?, 'running', ?, ?, ?) RETURNING id`)
         .get(kind, traderId, model.id, packId, dryRun ? 1 : 0, attempt, JSON.stringify({ system: o.system, messages }), now().toISOString())
     ).id
+    // What each finished round cost and did, kept even when a later round fails.
+    /** @type {import('ai').LanguageModelUsage[]} */
+    const used = []
+    /** @type {unknown[]} */
+    const steps = []
     try {
       const result = await generate({
         model: o.languageModel,
@@ -81,10 +88,15 @@ export async function callModel(o) {
         stopWhen: isStepCount(o.maxSteps ?? 1),
         reasoning: reasoningFor(model),
         maxRetries: 0,
+        abortSignal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
+        onStepFinish: (s) => {
+          used.push(s.usage)
+          steps.push({ text: s.text, toolCalls: s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })), toolResults: s.toolResults.map((r) => ({ tool: r.toolName, output: r.output })), usage: s.usage })
+        },
       })
       const output = /** @type {T} */ (result.output)
       const toolCalls = result.steps.flatMap((s) => s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })))
-      costMicro += finish(db, runId, model, result.totalUsage, { status: 'succeeded', response: JSON.stringify({ text: result.text, toolCalls }), now })
+      costMicro += finish(db, runId, model, result.totalUsage, { status: 'succeeded', response: JSON.stringify({ text: result.text, toolCalls, steps }), now })
       return { ok: true, output, runId, costMicro }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
@@ -99,7 +111,7 @@ export async function callModel(o) {
           continue
         }
       } else {
-        costMicro += finish(db, runId, model, undefined, { status: 'failed', response: null, error, now })
+        costMicro += finish(db, runId, model, sumUsage(used), { status: 'failed', response: steps.length ? JSON.stringify({ steps }) : null, error, now })
       }
       if (attempt < MAX_ATTEMPTS) await sleep(retryDelay(e, attempt))
     }
@@ -116,9 +128,24 @@ export async function callModel(o) {
  * @returns {number} the call's cost
  */
 function finish(db, runId, model, usage, { status, response, error = null, now }) {
-  const tokens = { input: usage?.inputTokens ?? 0, cached: usage?.inputTokenDetails?.cacheReadTokens ?? 0, output: usage?.outputTokens ?? 0 }
+  const tokens = { input: usage?.inputTokens ?? 0, cached: usage?.inputTokenDetails?.cacheReadTokens ?? 0, written: usage?.inputTokenDetails?.cacheWriteTokens ?? 0, output: usage?.outputTokens ?? 0 }
   const cost = costOf(model, tokens)
   db.run(`UPDATE runs SET status = ?, response = ?, error = ?, tokens_in = ?, tokens_cached = ?, tokens_out = ?, cost_micro = ?, finished_at = ? WHERE id = ?`,
     [status, response, error, tokens.input, tokens.cached, tokens.output, cost, now().toISOString(), runId])
   return cost
+}
+
+/**
+ * The tokens of the rounds that finished before a failure.
+ * @param {import('ai').LanguageModelUsage[]} used
+ * @returns {import('ai').LanguageModelUsage | undefined}
+ */
+function sumUsage(used) {
+  if (!used.length) return undefined
+  const add = (/** @type {(u: import('ai').LanguageModelUsage) => number | undefined} */ f) => used.reduce((n, u) => n + (f(u) ?? 0), 0)
+  return /** @type {import('ai').LanguageModelUsage} */ (/** @type {unknown} */ ({
+    inputTokens: add((u) => u.inputTokens),
+    outputTokens: add((u) => u.outputTokens),
+    inputTokenDetails: { cacheReadTokens: add((u) => u.inputTokenDetails?.cacheReadTokens), cacheWriteTokens: add((u) => u.inputTokenDetails?.cacheWriteTokens) },
+  }))
 }

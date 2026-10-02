@@ -164,6 +164,96 @@ describe('the scheduler', () => {
   })
 })
 
+describe('keeping the days in order', () => {
+  test("the evening's order counts and rule breaks are in the metrics once the Traders have decided", async () => {
+    startOnMonday()
+    at('2026-11-23T22:00:00Z')
+    await tick(context())
+    const orders = db.query("SELECT COUNT(*) AS n, SUM(verdict <> 'accepted') AS breaks FROM orders WHERE decided_on = '2026-11-23' AND status <> 'dry_run'").get()
+    const metrics = db.query("SELECT SUM(CASE WHEN key = 'orders_placed' THEN value END) AS n, SUM(CASE WHEN key = 'rule_breaks' THEN value END) AS breaks FROM metrics WHERE trading_date = '2026-11-23'").get()
+    expect(metrics).toEqual(orders)
+    expect(/** @type {any} */ (metrics).n).toBe(8)
+  })
+
+  test("a later day waits while an earlier day's trading steps are unfinished, and they keep trying", async () => {
+    startOnMonday()
+    const down = context({ failFirst: 1000 })
+    for (const t of ['2026-11-23T22:00:00Z', '2026-11-23T22:16:00Z', '2026-11-23T22:32:00Z']) {
+      at(t)
+      await tick(down)
+    }
+    // Tuesday: no open, no Floor Runner, no Traders while Monday has no decisions.
+    at('2026-11-24T23:00:00Z')
+    const tuesday = await tick(down)
+    expect(tuesday.map((r) => [r.date, r.step, r.status])).toEqual([['2026-11-23', 'floor-runner', 'failed']])
+    expect(steps('2026-11-24')).toEqual([])
+    // Once the data is back, Monday finishes first, then Tuesday runs on top of it.
+    at('2026-11-25T00:30:00Z')
+    const after = await tick(context())
+    expect(after.slice(0, 3).map((r) => [r.date, r.step])).toEqual([['2026-11-23', 'floor-runner'], ['2026-11-23', 'daily-traders'], ['2026-11-23', 'daily-recap']])
+    expect(after.slice(3).map((r) => [r.date, r.step, r.status])).toEqual([
+      ['2026-11-24', 'opening-bell', 'succeeded'], ['2026-11-24', 'floor-runner', 'succeeded'], ['2026-11-24', 'daily-traders', 'succeeded'], ['2026-11-24', 'daily-recap', 'succeeded'],
+    ])
+  })
+
+  test("books that don't balance stop the day before any Trader decides", async () => {
+    startOnMonday()
+    at('2026-11-23T22:00:00Z')
+    await tick(context())
+    at('2026-11-24T15:00:00Z')
+    await tick(context())
+    db.run("UPDATE positions SET quantity_micro = quantity_micro + 1 WHERE trader_id = (SELECT MIN(trader_id) FROM positions)")
+    calls = []
+    at('2026-11-24T22:00:00Z')
+    const r = await tick(context())
+    expect(r.map((x) => [x.step, x.status])).toEqual([['floor-runner', 'failed']])
+    expect(r[0].note).toContain("The books don't balance")
+    expect(calls).toEqual([])
+  })
+
+  test('a pause during the evening stops the Traders who have not decided yet', async () => {
+    startOnMonday()
+    at('2026-11-23T22:00:00Z')
+    let first = true
+    const pausing = new MockLanguageModelV4({
+      doGenerate: async () => {
+        if (first) pauseExperiment(db, clock)
+        first = false
+        return {
+          content: [{ type: 'text', text: JSON.stringify(traderAnswer) }],
+          finishReason: { unified: 'stop', raw: undefined },
+          usage: { inputTokens: { total: 10, noCache: 10, cacheRead: 0, cacheWrite: undefined }, outputTokens: { total: 5, text: 5, reasoning: undefined } },
+          warnings: [],
+        }
+      },
+    })
+    const r = await tick({ ...context(), languageModel: () => pausing })
+    expect(r.map((x) => [x.step, x.status])).toEqual([['floor-runner', 'succeeded'], ['daily-traders', 'skipped'], ['daily-recap', 'skipped']])
+    expect(db.query('SELECT COUNT(*) AS n FROM decisions').get()).toEqual({ n: 1 })
+  })
+
+  test('splits and dividends whose ex-date fell during a pause are applied at the next open', async () => {
+    startOnMonday()
+    at('2026-11-23T22:00:00Z')
+    await tick(context())
+    at('2026-11-24T15:00:00Z')
+    await tick(context())
+    const aapl = /** @type {{ id: number }} */ (db.query("SELECT id FROM instruments WHERE ticker = 'AAPL'").get()).id
+    const before = db.query('SELECT trader_id, quantity_micro FROM positions WHERE instrument_id = ? ORDER BY trader_id').all(aapl)
+    db.run("INSERT INTO corporate_actions (instrument_id, kind, ex_date, split_from, split_to) VALUES (?, 'split', '2026-11-25', 1, 2)", [aapl])
+    db.run("INSERT INTO corporate_actions (instrument_id, kind, ex_date, cash_per_share_micro) VALUES (?, 'dividend', '2026-11-25', 1000000)", [aapl])
+    pauseExperiment(db, clock)
+    at('2026-11-25T15:00:00Z')
+    await tick(context())
+    resumeExperiment(db, clock)
+    at('2026-11-27T15:00:00Z')
+    await tick(context())
+    expect(db.query('SELECT trader_id, quantity_micro FROM positions WHERE instrument_id = ? ORDER BY trader_id').all(aapl))
+      .toEqual(before.map((/** @type {any} */ p) => ({ ...p, quantity_micro: p.quantity_micro * 2 })))
+    expect(db.query("SELECT COUNT(*) AS n FROM cash_ledger WHERE kind IN ('split', 'dividend')").get()).toEqual({ n: before.length * 2 })
+  })
+})
+
 describe('the dry run', () => {
   test('builds a pack if there is none, and every Trader decides without anything being queued', async () => {
     at('2026-11-24T22:00:00Z')
