@@ -4,8 +4,8 @@ import { formatClock, NY_TIME_ZONE } from '../utils/time.js'
 const LOOK = /** @type {Record<string, { box: string, dot: string, word: string }>} */ ({
   open: { box: 'border-good bg-good-wash text-good', dot: 'bg-current', word: 'Market open' },
   soon: { box: 'border-warn text-warn', dot: 'mj-dot-half', word: 'Opens soon' },
-  closed: { box: 'border-line-strong text-fg-soft', dot: '', word: 'Market closed' },
-  holiday: { box: 'border-line-strong text-fg-soft', dot: '', word: 'Market closed' },
+  closed: { box: 'border-bad bg-bad-wash text-bad', dot: '', word: 'Market closed' },
+  holiday: { box: 'border-bad bg-bad-wash text-bad', dot: '', word: 'Market closed' },
 })
 
 /**
@@ -29,7 +29,8 @@ export function marketWhen(market, changesAt, now) {
 }
 
 // The New York market's state as a pill: colour, dot shape and words all say the
-// same thing, so it reads without colour. Closed is normal, so never red.
+// same thing, so it reads without colour: green open (filled dot), amber the hour
+// before the open (half dot), red closed (hollow dot). Cas chose red for closed.
 /**
  * @param {{ market: string, changesAt: string | null, now: number }} props
  */

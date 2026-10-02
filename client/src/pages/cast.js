@@ -21,44 +21,47 @@ const ICONS = /** @type {Record<string, any>} */ ({
   gallery: () => html`<svg width="48" height="48" viewBox="0 0 48 48" aria-hidden="true" class="text-fg"><g stroke="currentColor" fill="none" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M8 14h32M8 24h32M8 34h32"/><path d="M12 14v-3M20 14v-3M28 14v-3M36 14v-3M12 24v-3M20 24v-3M28 24v-3M36 24v-3M12 34v-3M20 34v-3M28 34v-3M36 34v-3"/><path d="M6 40h36"/></g></svg>`,
 })
 
-// Who's who, in the order a visitor meets them. Each card has an id so persona
-// names elsewhere can link to it (/cast#compliance-desk).
+// Who's who, in the order of a trading day: the Floor Runner builds the pack, the
+// Traders decide, the Compliance Desk checks, the Opening Bell fills and the
+// Columnist writes; then The Index, the Trade Master and the Gallery. Each card has
+// an id so persona names elsewhere can link to it (/cast#compliance-desk).
 const CAST = [
-  { id: 'trade-master', icon: 'tradeMaster', name: 'Trade Master', text: 'Cas. Sets up Traders, rules and budget. The only one who can change anything.', when: 'whenever Cas changes a setting' },
-  { id: 'traders' },
   { id: 'floor-runner', icon: 'floorRunner', name: 'Floor Runner', text: 'Gathers prices and headlines after the close into the briefing pack.', when: 'every trading day after the close' },
+  { id: 'traders' },
   { id: 'compliance-desk', icon: 'complianceDesk', name: 'Compliance Desk', text: 'Checks every order against the rules, trimming or rejecting any that break them.', when: 'after the Traders decide' },
   { id: 'opening-bell', icon: 'openingBell', name: 'Opening Bell', text: "Fills queued orders at the next day's opening price. Sells first, then buys.", when: 'at the New York open' },
-  { id: 'the-index', icon: 'index', name: 'The Index', text: 'The do-nothing benchmark: buys SPY on day one and holds. Always the grey dashed line.', when: 'buys once, on day one' },
   { id: 'market-columnist', icon: 'columnist', name: 'Market Columnist', text: 'Writes the daily recap and weekly report. Watches, explains, never trades.', when: 'after each evening run, and at the end of the week' },
+  { id: 'the-index', icon: 'index', name: 'The Index', text: 'The do-nothing benchmark: buys SPY on day one and holds. Always the grey dashed line.', when: 'buys once, on day one' },
+  { id: 'trade-master', icon: 'tradeMaster', name: 'Trade Master', text: 'Cas. Sets up Traders, rules and budget. The only one who can change anything.', when: 'whenever Cas changes a setting' },
   { id: 'gallery', icon: 'gallery', name: 'Gallery', text: 'The public, once Cas switches it on. Reads everything, changes nothing.', when: 'once Cas opens it' },
 ]
 
 // Before the experiment starts there is no live line-up yet: show the four models.
 const MODELS = [{ name: 'Claude', colourSlot: 1 }, { name: 'GPT', colourSlot: 2 }, { name: 'Gemini', colourSlot: 3 }, { name: 'DeepSeek', colourSlot: 4 }]
 
-const card = 'flex scroll-mt-4 flex-col gap-3 rounded-panel border border-line bg-surface-raised p-4 shadow-panel'
+const card = 'flex h-full scroll-mt-4 flex-col gap-3 rounded-panel border border-line bg-surface-raised p-4 shadow-panel'
 const title = 'font-display text-2xl font-semibold text-fg'
 const text = 'text-[15px] leading-[22px] text-fg-soft'
 
-// The cast: who does what in the experiment.
+// The cast: who does what in the experiment. Three across on a laptop, every
+// card the same height; The Traders is two cards wide, with its list in two columns.
 function CastPage() {
   useMeta({ title: 'The cast · Market Jury' })
   const traders = useFetch('/api/traders')
   return html`
     <div class="flex flex-col gap-8">
       ${PageHeader({ eyebrow: 'Market Jury · who does what', title: 'The cast', intro: 'Four AI models trade virtual money. Everyone else here is plain code with a job title.' })}
-      <div class="grid items-start gap-4 sm:grid-cols-2 lg:grid-cols-4">
-        ${CAST.map((c) => c.id === 'traders' ? html`<article id="traders" class="${card}">
+      <div class="grid gap-4 sm:grid-cols-2 lg:auto-rows-fr lg:grid-cols-3">
+        ${CAST.map((c) => c.id === 'traders' ? html`<article id="traders" class="${`${card} sm:order-first sm:col-span-2 lg:order-none`}">
           <h2 class="${title}">The Traders</h2>
           <p class="${text}">Eight AI agents, two per model, each with its own virtual money. Each colour is theirs for life.</p>
           ${Loadable(traders, (r) => TraderList(r.traders.filter((/** @type {any} */ t) => t.kind === 'ai')))}
-          <p class="prompt">When · every trading day after the close</p>
-        </article>` : html`<article id="${c.id}" class="${card}">
+          <p class="prompt mt-auto">When · every trading day after the close</p>
+        </article>` : html`<article id="${c.id}" class="${c.id === 'gallery' ? `${card} sm:col-span-2 lg:col-span-1` : card}">
           ${ICONS[String(c.icon)]()}
           <h2 class="${title}">${c.name}</h2>
           <p class="${text}">${c.text}</p>
-          <p class="prompt">When · ${c.when}</p>
+          <p class="prompt mt-auto">When · ${c.when}</p>
         </article>`)}
       </div>
     </div>
@@ -70,7 +73,7 @@ function TraderList(traders) {
   if (!traders.length) {
     return html`<ul class="grid grid-cols-2 gap-3">${MODELS.map((m) => html`<li class="flex items-center gap-2.5">${TraderMark({ ...m, kind: 'ai' })}<span class="flex flex-col"><span class="font-semibold text-fg">${m.name}</span><span class="prompt">Daily + Weekly</span></span></li>`)}</ul>`
   }
-  return html`<ul class="flex flex-col">${traders.map((t) => html`<li>
+  return html`<ul class="grid gap-x-4 sm:grid-cols-2">${traders.map((t) => html`<li>
     <a href="${`/traders/${t.id}`}" class="${`flex min-h-11 items-center gap-2.5 rounded-control hover:bg-surface-inset ${t.status === 'retired' ? 'opacity-50' : ''}`}" @click="${navigate(`/traders/${t.id}`)}">
       ${TraderMark(t, { size: 'sm' })}
       <span class="flex flex-col leading-tight"><span class="font-semibold text-fg">${displayName(t.name)}</span><span class="font-mono text-xs text-fg-soft">${t.modelVersion ?? ''}${t.status === 'retired' ? ' · retired' : ''}</span></span>

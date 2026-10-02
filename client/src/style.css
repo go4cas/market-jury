@@ -68,7 +68,7 @@
   --color-warn: #9A6700;       /* banner border and icon */
   --color-warn-wash: #FFF4D6;  /* banner ground */
   --color-good-wash: #DAFBE1;  /* Market open pill ground */
-  --color-bad-wash: #FFEBE9;   /* destructive confirmation line */
+  --color-bad-wash: #FFEBE9;   /* destructive confirmation line, Market closed pill ground */
   --color-scrim: rgb(31 35 40 / 0.48); /* dialog ::backdrop */
   --color-on-brand: #FFFFFF;   /* text on bg-brand */
   --color-highlighter: rgba(53, 106, 153, 0.16); /* glossary-term wash, with a dotted brand underline */
