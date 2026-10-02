@@ -78,6 +78,16 @@ export function saveCalendar(db, days, calendar = 'XNYS') {
 }
 
 /**
+ * The source of a bar saved at the open: its open is official, the rest is
+ * not final until the Floor Runner stores the full day after the close.
+ */
+export const PARTIAL_BAR = 'alpaca-open'
+
+/** @param {number} n */
+const price = (n) => Number.isSafeInteger(n) && n > 0
+
+/**
+ * Save daily bars. A bar with a missing, zero or negative price is left out.
  * @param {Database} db
  * @param {Bar[]} bars
  * @param {string} source
@@ -91,7 +101,8 @@ export function saveBars(db, bars, source) {
   db.transaction(() => {
     for (const b of bars) {
       const id = ids.get(b.ticker)
-      if (id) upsert.run(id, b.date, b.openMicro, b.highMicro, b.lowMicro, b.closeMicro, b.volume, source)
+      if (!id || ![b.openMicro, b.highMicro, b.lowMicro, b.closeMicro].every(price) || !/^\d{4}-\d{2}-\d{2}$/.test(b.date)) continue
+      upsert.run(id, b.date, b.openMicro, b.highMicro, b.lowMicro, b.closeMicro, Number.isSafeInteger(b.volume) ? b.volume : 0, source)
     }
   })()
 }
@@ -122,6 +133,9 @@ export function saveNews(db, items) {
 }
 
 /**
+ * Announced actions can be revised until they are applied; once the Opening
+ * Bell has booked one, it stays as it was booked, so replaying the books gives
+ * the same answer later.
  * @param {Database} db
  * @param {CorporateAction[]} actions
  */
@@ -130,7 +144,8 @@ export function saveCorporateActions(db, actions) {
   const upsert = db.prepare(`INSERT INTO corporate_actions (instrument_id, kind, ex_date, pay_date, split_from, split_to, cash_per_share_micro)
     VALUES (?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT (instrument_id, kind, ex_date) DO UPDATE SET pay_date = excluded.pay_date, split_from = excluded.split_from,
-      split_to = excluded.split_to, cash_per_share_micro = excluded.cash_per_share_micro`)
+      split_to = excluded.split_to, cash_per_share_micro = excluded.cash_per_share_micro
+    WHERE NOT EXISTS (SELECT 1 FROM cash_ledger l WHERE l.corporate_action_id = corporate_actions.id)`)
   db.transaction(() => {
     for (const a of actions) {
       const id = ids.get(a.ticker)

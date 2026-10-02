@@ -119,12 +119,7 @@ export function metricsFor(db, trader, date) {
   )
   m.trades = traded.n
   m.turnover_pct = share(traded.amount, value.total)
-  const placed = /** @type {{ n: number, breaks: number }} */ (
-    db.query(`SELECT COUNT(*) AS n, COALESCE(SUM(verdict <> 'accepted'), 0) AS breaks FROM orders
-              WHERE trader_id = ? AND decided_on = ? AND run_id IS NOT NULL AND status <> 'dry_run'`).get(trader.id, date)
-  )
-  m.orders_placed = placed.n
-  m.rule_breaks = placed.breaks
+  Object.assign(m, orderMetrics(db, trader.id, date))
 
   // Holding period and mistake handling, from a replay of the fills.
   const { lots, fills } = replay(db, trader.id, date)
@@ -140,6 +135,37 @@ export function metricsFor(db, trader, date) {
   m.losers_cut = cut.length
   if (cut.length) m.days_to_cut_loser = round2(cut.reduce((sum, f) => sum + daysSince(/** @type {import('./books.js').Lot} */ (f.before).openedOn), 0) / cut.length)
   return m
+}
+
+/**
+ * Orders a Trader placed on the evening of `date`, and how many the
+ * Compliance Desk trimmed or rejected.
+ * @param {Database} db
+ * @param {number} traderId
+ * @param {string} date
+ */
+function orderMetrics(db, traderId, date) {
+  const placed = /** @type {{ n: number, breaks: number }} */ (
+    db.query(`SELECT COUNT(*) AS n, COALESCE(SUM(verdict <> 'accepted'), 0) AS breaks FROM orders
+              WHERE trader_id = ? AND decided_on = ? AND run_id IS NOT NULL AND status <> 'dry_run'`).get(traderId, date)
+  )
+  return { orders_placed: placed.n, rule_breaks: placed.breaks }
+}
+
+/**
+ * The close's metrics are written before the evening's decisions, so once
+ * the Traders have decided, their order counts are written again.
+ * @param {Database} db
+ * @param {string} date
+ */
+export function recordOrderMetrics(db, date) {
+  const upsert = db.prepare('INSERT INTO metrics (trader_id, trading_date, key, value) VALUES (?, ?, ?, ?) ON CONFLICT (trader_id, trading_date, key) DO UPDATE SET value = excluded.value')
+  db.transaction(() => {
+    for (const t of tradersOn(db, date)) {
+      if (!db.query('SELECT 1 FROM snapshots WHERE trader_id = ? AND trading_date = ?').get(t.id, date)) continue
+      for (const [key, value] of Object.entries(orderMetrics(db, t.id, date))) upsert.run(t.id, date, key, value)
+    }
+  })()
 }
 
 /**

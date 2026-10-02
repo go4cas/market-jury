@@ -31,7 +31,7 @@ export function lookupTools(db, date, cutoff) {
         const inst = instrument(ticker)
         if (!inst) return { error: `${ticker} is not a ticker in the stored data.` }
         const rows = /** @type {Array<{ date: string, open_micro: number, high_micro: number, low_micro: number, close_micro: number, volume: number }>} */ (
-          db.query('SELECT date, open_micro, high_micro, low_micro, close_micro, volume FROM daily_bars WHERE instrument_id = ? AND date <= ? ORDER BY date DESC LIMIT ?').all(inst.id, date, days)
+          db.query("SELECT date, open_micro, high_micro, low_micro, close_micro, volume FROM daily_bars WHERE instrument_id = ? AND date <= ? AND source <> 'alpaca-open' ORDER BY date DESC LIMIT ?").all(inst.id, date, days)
         )
         return {
           ticker: inst.ticker,

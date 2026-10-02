@@ -124,6 +124,48 @@ describe('a Trader run', () => {
   })
 })
 
+describe('a Trader run, guarded', () => {
+  test('an absurd amount or an oversized answer is not accepted', () => {
+    const huge = { ...traderAnswer, orders: [{ ...traderAnswer.orders[0], amount_usd: 1e308 }] }
+    expect(answerSchema.safeParse(huge).success).toBe(false)
+    expect(answerSchema.safeParse({ ...traderAnswer, journal: 'x'.repeat(5000) }).success).toBe(false)
+    expect(answerSchema.safeParse({ ...traderAnswer, orders: Array.from({ length: 41 }, () => traderAnswer.orders[1]) }).success).toBe(false)
+    expect(answerSchema.safeParse(traderAnswer).success).toBe(true)
+  })
+
+  test('if its orders cannot be checked, nothing of the decision is kept, so it can be asked again', async () => {
+    db.run("CREATE TRIGGER desk_down BEFORE INSERT ON orders BEGIN SELECT RAISE(ABORT, 'the desk is down'); END")
+    const result = await run(mockModel([answer()]))
+    expect(result.ok).toBe(false)
+    expect(result.error).toContain("Compliance Desk couldn't process")
+    expect(db.query('SELECT COUNT(*) AS n FROM decisions').get()).toEqual({ n: 0 })
+    expect(db.query('SELECT status FROM runs').get()).toEqual({ status: 'failed' })
+  })
+
+  test('a briefing for a past evening shows the books of that evening, not later fills', async () => {
+    await run(mockModel([answer()]))
+    const mon = traderBriefing(db, 1, MON)
+    ringOpeningBell(db, { date: TUE, now: NOW })
+    expect(traderBriefing(db, 1, MON)).toEqual(mon)
+    expect(mon.portfolio).toMatchObject({ cash_usd: 1000, positions: [] })
+  })
+
+  test('a failed attempt keeps the cost of the rounds that did finish', async () => {
+    const mock = mockModel([{ toolCalls: [{ name: 'get_price_history', input: { ticker: 'AAPL', days: 2 } }] }, { error: 'Connection reset' }], { input: 10_000, output: 1_000 })
+    await run(mock)
+    const first = /** @type {{ cost_micro: number, tokens_in: number, response: string }} */ (db.query('SELECT cost_micro, tokens_in, response FROM runs ORDER BY id LIMIT 1').get())
+    expect(first.tokens_in).toBe(10_000)
+    expect(first.cost_micro).toBe(30_000)
+    expect(JSON.parse(first.response).steps[0].toolResults[0].output.ticker).toBe('AAPL')
+  })
+
+  test("writing to Anthropic's prompt cache costs a quarter more than plain input", () => {
+    const m = modelRow(db, 1)
+    // 10,000 written at $2.50 plus 10,000 plain at $2 per million.
+    expect(costOf(m, { input: 20_000, cached: 0, written: 10_000, output: 0 })).toBe(45_000)
+  })
+})
+
 describe('the Market Columnist', () => {
   test('writes the daily recap once, from the record of the day', async () => {
     ensureColumnistModels(db, NOW)

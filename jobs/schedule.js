@@ -3,15 +3,20 @@
 // trading date in step_runs, so nothing runs twice; if the server was down,
 // missed steps run in order when it is back (a late Opening Bell still fills
 // at that day's official open). A paused experiment skips its due steps.
+//
+// Trading days happen in order: while a trading step (the Opening Bell, the
+// Floor Runner, the Traders) of an earlier day is unfinished, no step of a
+// later day starts, so a day is never decided on holdings from its future.
+// Those steps keep trying (hourly after the first few tries) until they work.
 import { closeInstant, isLastTradingDayOfWeek, marketDate, openInstant, tradingDaysBetween } from '../core/calendar.js'
 import { checkBooks } from '../core/books.js'
-import { closeOfDay } from '../core/metrics.js'
+import { closeOfDay, recordOrderMetrics } from '../core/metrics.js'
 import { awardBadgesAtClose } from '../core/standings.js'
 import { ringOpeningBell } from '../core/openingBell.js'
 import { budget, mayRun } from '../agents/budget.js'
 import { writeColumn } from '../agents/columnist.js'
 import { runTrader } from '../agents/trader.js'
-import { saveBars } from '../market/store.js'
+import { PARTIAL_BAR, saveBars } from '../market/store.js'
 import { INDEX_TICKER } from '../core/traders.js'
 import { runFloorRunner } from './floorRunner.js'
 
@@ -21,6 +26,8 @@ const MINUTE = 60_000
 /** A failed step tries again on its own this many times in all, this far apart. */
 export const AUTO_ATTEMPTS = 3
 const RETRY_AFTER = 15 * MINUTE
+/** After its automatic tries, a trading step keeps trying this often: later days wait for it. */
+const KEEP_TRYING_EVERY = 60 * MINUTE
 /** A step still 'running' after this long was cut off (the server stopped mid-step) and runs again. */
 const STALE_AFTER = 30 * MINUTE
 
@@ -54,8 +61,15 @@ export const floorRunnerDue = (db, date) => {
  * @property {(db: Database, date: string, startDate: string) => boolean} [runsOn] default: every trading day
  * @property {(db: Database, date: string) => Date | null} due
  * @property {string[]} after steps that must be done (succeeded or skipped) first, same date
- * @property {(ctx: StepContext, date: string) => Promise<string | null>} run returns a note, or null; throws on failure
+ * @property {boolean} [trading] a trading step: later days wait until it is done
+ * @property {(ctx: StepContext, date: string) => Promise<StepOutcome>} run returns a note (or null) when it worked,
+ *   `{ skipped }` when there was nothing to do; throws on failure
  */
+
+/** @typedef {string | null | { skipped: string }} StepOutcome */
+
+/** @param {Database} db */
+const experimentState = (db) => /** @type {{ experiment_state: string }} */ (db.query('SELECT experiment_state FROM settings WHERE id = 1').get()).experiment_state
 
 /**
  * Run every active AI Trader of a cadence on that day's pack. A Trader that
@@ -67,7 +81,7 @@ export const floorRunnerDue = (db, date) => {
  */
 async function runTraders(ctx, date, cadence) {
   const { db } = ctx
-  if (!mayRun(budget(db, ctx.now()), `${cadence} trader`)) return `Skipped: the month's projected spend has reached the budget ceiling, so the ${cadence} Traders pause.`
+  if (!mayRun(budget(db, ctx.now()), `${cadence} trader`)) return { skipped: `Skipped: the month's projected spend has reached the budget ceiling, so the ${cadence} Traders pause.` }
   const pack = /** @type {{ id: number } | null} */ (db.query('SELECT id FROM briefing_packs WHERE kind = ? AND trading_date = ?').get(cadence, date))
   if (!pack) throw new Error(`There is no ${cadence} briefing pack for ${date}.`)
   const traders = /** @type {Array<{ id: number, name: string }>} */ (
@@ -77,9 +91,16 @@ async function runTraders(ctx, date, cadence) {
   )
   const held = []
   for (const t of traders) {
+    // A pause takes effect between Traders, not only between steps.
+    if (experimentState(db) !== 'running') {
+      recordOrderMetrics(db, date)
+      return { skipped: `The experiment was paused before ${t.name} decided.` }
+    }
     const r = await runTrader({ db, traderId: t.id, packId: pack.id, now: ctx.now, languageModel: ctx.languageModel, generate: ctx.generate, sleep: ctx.sleep })
     if (!r.ok) held.push(`${t.name} (${r.error})`)
   }
+  // The day's metrics were written at the close; the orders exist only now.
+  recordOrderMetrics(db, date)
   return held.length ? `These Traders couldn't decide and hold this time: ${held.join('; ')}.` : null
 }
 
@@ -89,7 +110,7 @@ async function runTraders(ctx, date, cadence) {
  * @param {string} date
  */
 async function column(ctx, kind, date) {
-  if (!mayRun(budget(ctx.db, ctx.now()), kind === 'daily' ? 'daily recap' : 'weekly report')) return "Skipped: the month's projected spend has reached the budget ceiling, so the daily recap pauses."
+  if (!mayRun(budget(ctx.db, ctx.now()), kind === 'daily' ? 'daily recap' : 'weekly report')) return { skipped: "Skipped: the month's projected spend has reached the budget ceiling, so the daily recap pauses." }
   const r = await writeColumn({ db: ctx.db, kind, date, now: ctx.now, languageModel: ctx.languageModel, generate: ctx.generate, sleep: ctx.sleep })
   if (!r.ok) throw new Error(`The Market Columnist couldn't write the ${kind === 'daily' ? 'daily recap' : 'weekly report'}: ${r.error}`)
   return null
@@ -105,32 +126,40 @@ export const STEPS = /** @type {Step[]} */ ([
     runsOn: (db, date, startDate) => date > startDate,
     due: openingBellDue,
     after: [],
+    trading: true,
     run: async ({ db, alpaca, now }, date) => {
-      // Today's official opening prices for what will trade. The rest of today's bar fills in
-      // later: the Floor Runner overwrites it with the full day after the close.
+      // Today's official opening prices for what will trade. The rest of today's bar is not
+      // final yet (stored as partial): the Floor Runner replaces it with the full day after the close.
       const tickers = db.query(`SELECT DISTINCT ticker FROM orders WHERE status = 'queued' AND fill_on = ? AND instrument_id IS NOT NULL
                                 UNION SELECT ? WHERE EXISTS (SELECT 1 FROM traders WHERE kind = 'benchmark' AND status = 'active' AND started_on <= ?)`)
         .values(date, INDEX_TICKER, date).map(([t]) => String(t))
-      if (tickers.length) saveBars(db, await alpaca.dailyBars(tickers, date, date), 'alpaca')
-      const r = ringOpeningBell(db, { date, now: now() })
+      if (tickers.length) saveBars(db, await alpaca.dailyBars(tickers, date, date), PARTIAL_BAR)
+      // Splits and dividends from opens that were skipped (a pause) are applied at this one.
+      const { start_date: startDate } = /** @type {{ start_date: string }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get())
+      const lastRung = /** @type {{ d: string | null }} */ (db.query("SELECT MAX(trading_date) AS d FROM step_runs WHERE step = 'opening-bell' AND status = 'succeeded' AND trading_date < ?").get(date)).d
+      const r = ringOpeningBell(db, { date, now: now(), since: lastRung ?? startDate })
       return `Filled ${r.filled} orders${r.scaled ? `, scaled down ${r.scaled}` : ''}${r.cancelled ? `, cancelled ${r.cancelled}` : ''}.`
     },
   },
   {
     name: 'floor-runner',
     due: floorRunnerDue,
-    after: [],
+    // The close values the day's fills, so they come first.
+    after: ['opening-bell'],
+    trading: true,
     run: async ({ db, alpaca, menu, now }, date) => {
       const r = await runFloorRunner({ db, alpaca, date, menu, now })
-      if (r.skipped) return r.skipped
+      if (r.skipped) return { skipped: r.skipped }
+      // Books that don't balance stop the day here: no Trader decides on wrong holdings.
+      const problems = checkBooks(db)
+      if (problems.length) throw new Error(`The books don't balance: ${problems.join(' ')}`)
       closeOfDay(db, date)
       awardBadgesAtClose(db, date)
-      const problems = checkBooks(db)
-      return problems.length ? `The books don't balance: ${problems.join(' ')}` : null
+      return null
     },
   },
-  { name: 'daily-traders', due: floorRunnerDue, after: ['floor-runner'], run: (ctx, date) => runTraders(ctx, date, 'daily') },
-  { name: 'weekly-traders', runsOn: lastOfWeek, due: floorRunnerDue, after: ['daily-traders'], run: (ctx, date) => runTraders(ctx, date, 'weekly') },
+  { name: 'daily-traders', due: floorRunnerDue, after: ['floor-runner'], trading: true, run: (ctx, date) => runTraders(ctx, date, 'daily') },
+  { name: 'weekly-traders', runsOn: lastOfWeek, due: floorRunnerDue, after: ['daily-traders'], trading: true, run: (ctx, date) => runTraders(ctx, date, 'weekly') },
   { name: 'daily-recap', due: floorRunnerDue, after: ['daily-traders', 'weekly-traders'], run: (ctx, date) => column(ctx, 'daily', date) },
   { name: 'weekly-report', runsOn: lastOfWeek, due: floorRunnerDue, after: ['weekly-traders'], run: (ctx, date) => column(ctx, 'weekly', date) },
 ])
@@ -158,6 +187,7 @@ export function dueSteps(db, now) {
   const runOf = db.prepare('SELECT step, trading_date, status, attempt, started_at, finished_at, error FROM step_runs WHERE step = ? AND trading_date = ?')
   const due = []
   for (const date of tradingDaysBetween(db, startDate, marketDate(now))) {
+    let unfinished = false
     /** @type {Map<string, StepRun | null>} */
     const runs = new Map(STEPS.map((s) => [s.name, /** @type {StepRun | null} */ (runOf.get(s.name, date))]))
     const applies = (/** @type {Step} */ s) => !s.runsOn || s.runsOn(db, date, startDate)
@@ -168,13 +198,20 @@ export function dueSteps(db, now) {
     }
     for (const step of STEPS) {
       if (!applies(step) || done(step.name)) continue
+      if (step.trading) unfinished = true
       const when = step.due(db, date)
       if (!when || when > now || !step.after.every(done)) continue
       const r = runs.get(step.name)
       if (r?.status === 'running' && now.getTime() - Date.parse(/** @type {string} */ (r.started_at)) < STALE_AFTER) continue
-      if (r?.status === 'failed' && (r.attempt >= AUTO_ATTEMPTS || now.getTime() - Date.parse(/** @type {string} */ (r.finished_at)) < RETRY_AFTER)) continue
+      if (r?.status === 'failed') {
+        const since = now.getTime() - Date.parse(/** @type {string} */ (r.finished_at))
+        if (since < RETRY_AFTER) continue
+        if (r.attempt >= AUTO_ATTEMPTS && !(step.trading && since >= KEEP_TRYING_EVERY)) continue
+      }
       due.push({ step, date })
     }
+    // Later days wait for this one's trading steps.
+    if (unfinished) break
   }
   return due
 }
@@ -186,11 +223,11 @@ export function dueSteps(db, now) {
  */
 export async function tick(ctx) {
   const { db } = ctx
-  const { experiment_state: state } = /** @type {{ experiment_state: string }} */ (db.query('SELECT experiment_state FROM settings WHERE id = 1').get())
-  if (state !== 'running' && state !== 'paused') return []
   const done = []
-  // Re-check after every step: one step finishing makes the next one due.
+  // Re-check after every step: one step finishing makes the next one due, and a pause or resume counts at once.
   for (let next = dueSteps(db, ctx.now())[0]; next; next = dueSteps(db, ctx.now())[0]) {
+    const state = experimentState(db)
+    if (state !== 'running' && state !== 'paused') break
     const { step, date } = next
     const at = ctx.now().toISOString()
     if (state === 'paused') {
@@ -203,8 +240,9 @@ export async function tick(ctx) {
             ON CONFLICT (step, trading_date) DO UPDATE SET status = 'running', attempt = excluded.attempt, started_at = excluded.started_at, finished_at = NULL, error = NULL`,
       [step.name, date, attempt, at])
     try {
-      const note = await step.run(ctx, date)
-      const skipped = note?.startsWith('Skipped') || note?.startsWith('The market is closed')
+      const outcome = await step.run(ctx, date)
+      const skipped = typeof outcome === 'object' && outcome !== null
+      const note = skipped ? outcome.skipped : outcome
       record(db, step.name, date, { status: skipped ? 'skipped' : 'succeeded', error: note, at: ctx.now().toISOString(), attempt })
       done.push({ step: step.name, date, status: skipped ? 'skipped' : 'succeeded', note })
     } catch (e) {

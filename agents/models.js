@@ -103,14 +103,19 @@ export function languageModel(model, env = process.env) {
  */
 export const reasoningFor = (model) => (/** @type {any} */ (['low', 'medium', 'high']).includes(model.effort) ? /** @type {'low' | 'medium' | 'high'} */ (model.effort) : 'provider-default')
 
+/** Anthropic charges a quarter more than normal input for writing to its prompt cache (5-minute cache). */
+const CACHE_WRITE_PREMIUM = { anthropic: 1.25 }
+
 /**
  * What a call cost, from its token counts and the model's prices.
  * @param {ModelRow} model
- * @param {{ input: number, cached: number, output: number }} tokens input includes the cached tokens
+ * @param {{ input: number, cached: number, written?: number, output: number }} tokens input includes the cached (read) and written tokens
  * @returns {number} micro-dollars
  */
-export function costOf(model, { input, cached, output }) {
-  const micro = (input - cached) * model.input_micro_per_mtok + cached * model.cached_input_micro_per_mtok + output * model.output_micro_per_mtok
+export function costOf(model, { input, cached, written = 0, output }) {
+  const premium = /** @type {Record<string, number>} */ (CACHE_WRITE_PREMIUM)[model.provider] ?? 1
+  const micro = (input - cached - written) * model.input_micro_per_mtok + written * model.input_micro_per_mtok * premium
+    + cached * model.cached_input_micro_per_mtok + output * model.output_micro_per_mtok
   return Math.round(micro / 1_000_000)
 }
 

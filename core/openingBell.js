@@ -7,7 +7,11 @@
 //
 // Running it twice for a day changes nothing: filled orders are no longer
 // queued, and each split or dividend is recorded once per Trader in the ledger.
+// When earlier opens were skipped (a pause), the splits and dividends whose
+// ex-dates fell in the gap are applied at this open, before any fill: nobody
+// traded in between, so the holdings are the ones that earned them.
 import { mulDiv, usd, valueOf } from './money.js'
+import { previousTradingDay } from './calendar.js'
 import { cashOf, closeOn, costAfterSale, openOn, positionsOf, rulesFor, valuePortfolio } from './portfolio.js'
 import { INDEX_TICKER } from './traders.js'
 
@@ -28,17 +32,19 @@ const INDEX_MIN_BUY_MICRO = 1_000_000
 
 /**
  * @param {Database} db
- * @param {{ date: string, now: Date }} options date: the trading day whose open fills the orders
+ * @param {{ date: string, now: Date, since?: string | null }} options date: the trading day whose open fills the orders;
+ *   since: the last day whose open did ring (default: the trading day before), so ex-dates after it are applied now
  * @returns {BellResult}
  */
-export function ringOpeningBell(db, { date, now }) {
+export function ringOpeningBell(db, { date, now, since }) {
   const at = now.toISOString()
+  const after = since ?? previousTradingDay(db, date) ?? new Date(Date.parse(`${date}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10)
   /** @type {BellResult} */
   const result = { filled: 0, scaled: 0, cancelled: 0, splits: 0, dividends: 0, retired: [] }
 
   db.transaction(() => {
-    result.splits = applySplits(db, date, at)
-    result.dividends = payDividends(db, date, at)
+    result.splits = applySplits(db, after, date, at)
+    result.dividends = payDividends(db, after, date, at)
 
     const traders = /** @type {Array<{ trader_id: number }>} */ (
       db.query("SELECT DISTINCT trader_id FROM orders WHERE status = 'queued' AND fill_on = ? ORDER BY trader_id").all(date)
@@ -67,13 +73,14 @@ export function ringOpeningBell(db, { date, now }) {
  * A split multiplies the shares held (4-for-1: 10 shares become 40) and leaves
  * what was paid unchanged. Sells already queued for that ticker scale too.
  * @param {Database} db
- * @param {string} date
+ * @param {string} after ex-dates after this day...
+ * @param {string} date ...up to this one
  * @param {string} at
  */
-function applySplits(db, date, at) {
+function applySplits(db, after, date, at) {
   const splits = /** @type {Array<{ id: number, instrument_id: number, ticker: string, split_from: number, split_to: number }>} */ (
     db.query(`SELECT c.id, c.instrument_id, i.ticker, c.split_from, c.split_to FROM corporate_actions c JOIN instruments i ON i.id = c.instrument_id
-              WHERE c.kind = 'split' AND c.ex_date = ? AND c.split_from > 0 AND c.split_to > 0`).all(date)
+              WHERE c.kind = 'split' AND c.ex_date > ? AND c.ex_date <= ? AND c.split_from > 0 AND c.split_to > 0 ORDER BY c.ex_date, c.id`).all(after, date)
   )
   let applied = 0
   for (const s of splits) {
@@ -100,13 +107,14 @@ function applySplits(db, date, at) {
  * Dividends go to whoever held the stock at the close before the ex-date,
  * credited on the ex-date (v1 does not wait for the pay date).
  * @param {Database} db
- * @param {string} date
+ * @param {string} after ex-dates after this day...
+ * @param {string} date ...up to this one
  * @param {string} at
  */
-function payDividends(db, date, at) {
+function payDividends(db, after, date, at) {
   const dividends = /** @type {Array<{ id: number, instrument_id: number, ticker: string, cash_per_share_micro: number }>} */ (
     db.query(`SELECT c.id, c.instrument_id, i.ticker, c.cash_per_share_micro FROM corporate_actions c JOIN instruments i ON i.id = c.instrument_id
-              WHERE c.kind = 'dividend' AND c.ex_date = ? AND c.cash_per_share_micro > 0`).all(date)
+              WHERE c.kind = 'dividend' AND c.ex_date > ? AND c.ex_date <= ? AND c.cash_per_share_micro > 0 ORDER BY c.ex_date, c.id`).all(after, date)
   )
   let paid = 0
   for (const d of dividends) {
@@ -170,7 +178,11 @@ function fillTrader(db, traderId, date, at, result) {
       cancel(o, 'There was nothing left to sell at the open.')
       continue
     }
-    fill(db, { traderId, order: o, price, qty, amount: valueOf(qty, price), fee, date, at })
+    // No borrowing, even for the trading cost: a sale can't take cash below zero.
+    const amount = valueOf(qty, price)
+    const sellFee = Math.max(0, Math.min(fee, cashOf(db, traderId) + amount))
+    fill(db, { traderId, order: o, price, qty, amount, fee: sellFee, date, at })
+    if (sellFee < fee) db.run('UPDATE orders SET fill_note = ? WHERE id = ?', [`The trading cost was cut to ${usd(sellFee)}, all the cash there was, so the sale couldn't leave cash below zero.`, o.id])
     result.filled++
   }
 

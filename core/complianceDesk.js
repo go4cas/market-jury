@@ -8,7 +8,8 @@
 // trimmed to the position cap, then to the cash available (sells counted first).
 import { nextTradingDay } from './calendar.js'
 import { mulDiv, usd, valueOf } from './money.js'
-import { cashOf, closeOn, positionsOf, rulesFor, valuePortfolio } from './portfolio.js'
+import { positionsAsOf } from './books.js'
+import { cashOf, closeOn, rulesFor, valuePortfolio } from './portfolio.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 
@@ -45,8 +46,9 @@ export function checkOrders(db, { traderId, runId = null, date, orders, dryRun =
   const fee = rules.per_trade_cost_micro
   const instrumentFor = db.prepare('SELECT id, on_menu FROM instruments WHERE ticker = ?')
 
-  const positions = positionsOf(db, traderId)
-  const portfolio = valuePortfolio(cashOf(db, traderId), positions, (id) => closeOn(db, id, date))
+  // The books as they stood at that close, even when the check runs later.
+  const positions = positionsAsOf(db, traderId, date)
+  const portfolio = valuePortfolio(cashOf(db, traderId, date), positions, (id) => closeOn(db, id, date))
   // What the Trader holds (micro-shares) and is worth per ticker, as orders are worked through.
   const held = new Map(portfolio.positions.map((p) => [p.instrument_id, p.quantity_micro]))
   const valueHeld = new Map(portfolio.positions.map((p) => [p.instrument_id, p.value_micro]))
