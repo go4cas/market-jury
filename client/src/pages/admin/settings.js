@@ -16,6 +16,8 @@ export const meta = { layout: 'app', title: 'Settings · Market Jury' }
 const h2 = 'font-display text-2xl font-semibold text-fg'
 const panel = 'flex flex-col gap-3 rounded-panel border border-line bg-surface-raised p-4'
 const input = 'mt-1.5 min-h-11 w-full rounded-control border border-line bg-surface-inset px-3 font-mono text-fg outline-none focus:border-brand focus:bg-surface-raised'
+// Amounts and percentages are short, so their boxes stay short too.
+const number = input.replace('w-full', 'block w-36')
 const primary = 'inline-flex min-h-11 items-center justify-center rounded-control bg-brand px-4 font-mono text-sm font-semibold text-on-brand hover:bg-brand-hover'
 const secondary = 'inline-flex min-h-11 items-center justify-center rounded-control border border-line-strong px-4 font-mono text-sm font-semibold text-fg hover:bg-surface-inset'
 
@@ -116,11 +118,11 @@ function SettingsPage() {
             <input type="checkbox" name="galleryEnabled" class="h-5 w-5 accent-brand" checked="${s.galleryEnabled ? true : false}" />
             <span><span class="font-semibold text-fg">Open the Gallery</span><span class="block text-sm text-fg-soft">Anyone with the address can read every screen except this one, the costs and the briefing pack.</span></span>
           </label>
-          <label class="block"><span class="prompt">Monthly budget, dollars</span><input class="${input}" name="budgetCeilingUsd" type="number" min="1" step="1" value="${String(s.budgetCeilingUsd)}" /></label>
-          <label class="block"><span class="prompt">Starting cash per Trader, dollars</span><input class="${input}" name="startingCashUsd" type="number" min="1" step="1" value="${String(s.startingCashUsd)}" disabled="${s.state !== 'setup'}" />
+          <label class="block"><span class="prompt">Monthly budget, dollars</span><input class="${number}" name="budgetCeilingUsd" type="number" min="1" step="1" value="${String(s.budgetCeilingUsd)}" /></label>
+          <label class="block"><span class="prompt">Starting cash per Trader, dollars</span><input class="${number}" name="startingCashUsd" type="number" min="1" step="1" value="${String(s.startingCashUsd)}" disabled="${s.state !== 'setup'}" />
             ${s.state !== 'setup' ? html`<span class="mt-1 block text-sm text-fg-soft">Fixed once the experiment starts.</span>` : ''}</label>
-          <label class="block"><span class="prompt">Position cap, percent</span><input class="${input}" name="positionCapPct" type="number" min="1" max="100" step="1" value="${String(s.positionCapPct ?? 20)}" /></label>
-          <label class="block"><span class="prompt">Cost per trade, dollars</span><input class="${input}" name="perTradeCostUsd" type="number" min="0" step="0.01" value="${String(s.perTradeCostUsd ?? 0)}" /></label>
+          <label class="block"><span class="prompt">Position cap, percent</span><input class="${number}" name="positionCapPct" type="number" min="1" max="100" step="1" value="${String(s.positionCapPct ?? 20)}" /></label>
+          <label class="block"><span class="prompt">Cost per trade, dollars</span><input class="${number}" name="perTradeCostUsd" type="number" min="0" step="0.01" value="${String(s.perTradeCostUsd ?? 0)}" /></label>
           <p class="text-sm text-fg-soft sm:col-span-2">New rules apply to every Trader from its next decision. Past days keep the rules they had.</p>
           <div class="sm:col-span-2"><button type="submit" class="${primary}">Save settings</button></div>
         </form>
@@ -163,9 +165,9 @@ function TradersPanel(list, act) {
         <label class="block"><span class="prompt">Exact model version</span><input class="${input}" name="modelVersion" required /></label>
         <label class="block"><span class="prompt">Effort</span><select class="${input}" name="effort"><option value="medium">Medium</option><option value="low">Low</option><option value="high">High</option><option value="default">Provider default</option></select></label>
         <label class="block"><span class="prompt">Decides</span><select class="${input}" name="cadence"><option value="daily">Every evening</option><option value="weekly">Once a week</option></select></label>
-        <label class="block"><span class="prompt">Input price, $ per million tokens</span><input class="${input}" name="inputUsdPerM" type="number" min="0" step="0.01" required /></label>
-        <label class="block"><span class="prompt">Cached input price, $ per million</span><input class="${input}" name="cachedUsdPerM" type="number" min="0" step="0.01" value="0" /></label>
-        <label class="block"><span class="prompt">Output price, $ per million tokens</span><input class="${input}" name="outputUsdPerM" type="number" min="0" step="0.01" required /></label>
+        <label class="block"><span class="prompt">Input price, $ per million tokens</span><input class="${number}" name="inputUsdPerM" type="number" min="0" step="0.01" required /></label>
+        <label class="block"><span class="prompt">Cached input price, $ per million</span><input class="${number}" name="cachedUsdPerM" type="number" min="0" step="0.01" value="0" /></label>
+        <label class="block"><span class="prompt">Output price, $ per million tokens</span><input class="${number}" name="outputUsdPerM" type="number" min="0" step="0.01" required /></label>
         ${() => fresh(JSON.stringify(ui.estimate), ui.estimate ? html`<p class="text-sm text-fg sm:col-span-2" role="status">Adds about $${ui.estimate.addedUsd.toFixed(2)} a month, for a projected $${ui.estimate.projectedUsd.toFixed(2)} of the $${ui.estimate.ceilingUsd.toFixed(2)} budget.${ui.estimate.warning ? html` <strong class="text-bad">${ui.estimate.warning}</strong>` : ''}</p>` : '')}
         <div class="flex flex-wrap gap-2 sm:col-span-2">
           <button type="button" class="${secondary}" @click="${async (/** @type {Event} */ e) => {
@@ -192,8 +194,9 @@ function MenuPanel(menu, act) {
     <p class="max-w-prose text-[15px] text-fg-soft">${menu.length} stocks and funds, ${off} taken off. A Trader can still sell a stock that was taken off, but nobody can buy it.</p>
     <label class="block sm:max-w-xs"><span class="prompt">Find a ticker or name</span><input class="${input}" type="search" @input="${/** @param {Event} e */ (e) => { ui.query = /** @type {HTMLInputElement} */ (e.target).value.trim().toLowerCase() }}" /></label>
     ${() => {
-      const hits = menu.filter((m) => !ui.query || m.ticker.toLowerCase().startsWith(ui.query) || m.name.toLowerCase().includes(ui.query)).slice(0, 30)
-      return fresh(ui.query, html`<ul class="flex flex-col">${hits.map((m) => html`<li class="flex items-center justify-between gap-2 border-t border-line py-1.5 text-sm">
+      const hits = menu.filter((m) => !ui.query || m.ticker.toLowerCase().startsWith(ui.query) || m.name.toLowerCase().includes(ui.query))
+      return fresh(ui.query, html`<p class="text-sm text-fg-soft">${ui.query ? `${hits.length} of ${menu.length} match.` : `All ${menu.length}, scroll to see them.`}</p>
+      <ul class="flex max-h-[28rem] flex-col overflow-y-auto overscroll-contain rounded-control border border-line px-3" tabindex="0" aria-label="Stocks and funds">${hits.map((m) => html`<li class="flex items-center justify-between gap-2 border-t border-line py-1.5 text-sm first:border-t-0">
         <span><span class="font-mono font-semibold text-fg">${m.ticker}</span> <span class="text-fg-soft">${m.name}</span></span>
         <button type="button" class="${secondary}" @click="${() => act('PATCH', '/api/admin/menu', { ticker: m.ticker, onMenu: !m.on_menu }, m.on_menu ? `${m.ticker} is off the list from now.` : `${m.ticker} is back on the list.`)}">${m.on_menu ? 'Take off' : 'Put back'}</button>
       </li>`.key(m.ticker))}</ul>`)
