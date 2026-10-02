@@ -205,3 +205,41 @@ button, a, input {
 .mj-hint::after { content: ""; position: absolute; inset: -13px; } /* 44px touch target */
 .mj-hint:hover, .mj-hint[aria-expanded="true"] { color: var(--color-brand); border-color: var(--color-brand); }
 @media (max-width: 479px) { .mj-pop[popover] { max-width: none; } }
+
+/* Dialog: confirmations and short forms. A bottom sheet on phones. */
+.mj-dialog { background: var(--color-surface-raised); color: var(--color-fg); border: 1px solid var(--color-line-strong); border-radius: var(--radius-panel); box-shadow: var(--shadow-float); padding: 0; width: min(480px, calc(100vw - 32px)); max-height: calc(100dvh - 32px); overflow-y: auto; margin: auto; }
+.mj-dialog--wide { width: min(640px, calc(100vw - 32px)); }
+.mj-dialog::backdrop { background: var(--color-scrim); }
+.mj-dialog__head { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; padding: 20px 20px 0; }
+.mj-dialog__body { padding: 12px 20px 20px; display: flex; flex-direction: column; gap: 12px; }
+.mj-dialog__foot { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; padding: 14px 20px; border-top: 1px solid var(--color-line); background: var(--color-surface); border-radius: 0 0 var(--radius-panel) var(--radius-panel); }
+.mj-consequence { background: var(--color-bad-wash); border-left: 3px solid var(--color-bad); padding: 10px 12px; border-radius: var(--radius-control); font-size: 15px; line-height: 22px; color: var(--color-fg); }
+@media (max-width: 559px) { .mj-dialog { width: 100vw; max-width: 100vw; margin: auto 0 0; max-height: 92dvh; border-radius: var(--radius-panel) var(--radius-panel) 0 0; } }
+
+/* Number fields: short, right-aligned, with "$" or "%" outside the box. */
+.mj-input--num { width: 14ch; text-align: right; }
+.mj-affix { display: inline-flex; align-items: center; gap: 6px; font: 400 15px/24px var(--font-mono); color: var(--color-fg-soft); }
+
+/* Select: a styled native select; the open list is styled too where the browser allows it. */
+.mj-select { appearance: none; min-height: 44px; min-width: 14ch; max-width: 100%; border-radius: var(--radius-control); border: 1px solid var(--color-line-strong); background-color: var(--color-surface-inset); background-repeat: no-repeat; background-image: linear-gradient(45deg, transparent 50%, var(--color-fg-soft) 50%), linear-gradient(-45deg, transparent 50%, var(--color-fg-soft) 50%); background-size: 6px 6px, 6px 6px; background-position: right 18px center, right 12px center; color: var(--color-fg); padding: 0 40px 0 12px; font: 500 15px/24px var(--font-mono); cursor: pointer; }
+.mj-select:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 1px; }
+@supports (appearance: base-select) {
+  .mj-select, .mj-select::picker(select) { appearance: base-select; }
+  .mj-select { background-image: none; padding-right: 12px; display: inline-flex; align-items: center; gap: 8px; }
+  .mj-select::picker-icon { color: var(--color-fg-soft); }
+  .mj-select::picker(select) { background: var(--color-surface-raised); border: 1px solid var(--color-line-strong); border-radius: var(--radius-control); box-shadow: var(--shadow-float); padding: 4px; margin-top: 4px; }
+  .mj-select option { min-height: 40px; padding: 0 10px; border-radius: 3px; font: 500 15px/24px var(--font-mono); color: var(--color-fg); display: flex; align-items: center; gap: 8px; }
+  .mj-select option:hover, .mj-select option:focus-visible { background: var(--color-brand-tint); }
+  .mj-select option:checked { color: var(--color-brand); }
+  .mj-select option::checkmark { color: var(--color-brand); }
+}
+
+/* Disclosure: collapsible Settings sections. */
+.mj-disclosure__btn { all: unset; box-sizing: border-box; width: 100%; min-height: 56px; display: grid; grid-template-columns: 1fr auto; align-items: center; gap: 2px 12px; padding: 12px 16px; cursor: pointer; border-radius: var(--radius-panel); }
+.mj-disclosure__btn:focus-visible { outline: 2px solid var(--color-brand); outline-offset: 2px; }
+.mj-disclosure__chev { grid-row: 1 / span 2; grid-column: 2; width: 10px; height: 10px; border-right: 2px solid var(--color-fg-soft); border-bottom: 2px solid var(--color-fg-soft); transform: rotate(45deg); transition: transform 0.15s; }
+.mj-disclosure__btn[aria-expanded="true"] .mj-disclosure__chev { transform: rotate(-135deg); }
+@media (prefers-reduced-motion: reduce) { .mj-disclosure__chev { transition: none; } }
+
+/* The experiment control bar at the top of Settings: actions, set apart from the fields below. */
+.mj-control { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; padding: 20px; border: 1px solid var(--color-brand); border-radius: var(--radius-panel); background: var(--color-brand-tint); }

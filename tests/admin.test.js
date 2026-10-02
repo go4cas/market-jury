@@ -73,8 +73,11 @@ describe('Trade Master routes', () => {
 
   test('shows the set-up line-up, then starts the experiment', async () => {
     const status = await data(call('/api/admin/status'))
-    expect(status).toMatchObject({ state: 'setup', startDate: null, firstDecisionDate: '2026-11-23', failedSteps: [] })
+    expect(status).toMatchObject({ state: 'setup', startDate: null, firstDecisionDate: '2026-11-23', failedSteps: [], day: 0 })
+    // When the next open is, for the Retire dialog's "sells at the next open".
+    expect(status.nextOpen).toMatch(/^2026-11-2\dT14:30:00.000Z$/)
     const { traders } = await data(call('/api/admin/traders'))
+    expect(traders[0].positions).toBe(0)
     expect(traders.map((/** @type {any} */ t) => t.name)).toEqual(['Claude daily', 'Claude weekly', 'GPT daily', 'GPT weekly', 'Gemini daily', 'Gemini weekly', 'DeepSeek daily', 'DeepSeek weekly'])
 
     const start = await call('/api/admin/experiment/start', { method: 'POST', body: {} })

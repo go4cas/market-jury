@@ -127,7 +127,7 @@ export const latestDate = (db) => /** @type {{ d: string | null }} */ (db.query(
  * @param {Database} db
  * @param {string} date
  */
-function dayNumber(db, date) {
+export function dayNumber(db, date) {
   const { start_date: start } = /** @type {{ start_date: string | null }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get())
   if (!start || date <= start) return 0
   const dayOne = nextTradingDay(db, start)

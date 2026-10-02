@@ -37,7 +37,7 @@ function BriefingPage() {
         const change = p.kind === 'weekly' ? 'chg_week' : 'chg_1d'
         return html`
           <label class="flex flex-col gap-1.5 sm:max-w-xs"><span class="prompt">Pick a date</span>
-            <select class="min-h-11 rounded-control border border-line-strong bg-surface-inset px-3 font-mono text-sm text-fg" @change="${/** @param {Event} e */ (e) => { ui.date = /** @type {HTMLSelectElement} */ (e.target).value }}">
+            <select class="mj-select" @change="${/** @param {Event} e */ (e) => { ui.date = /** @type {HTMLSelectElement} */ (e.target).value }}">
               ${r.dates.map((/** @type {string} */ d) => html`<option value="${d}" selected="${d === r.date ? true : false}">${day(d, { year: true })}</option>`)}
             </select></label>
           <p class="font-mono text-[13px] text-fg-soft">Built ${day(r.date)} at ${at(r.createdAt)} · ${p.prices.rows.length} tickers${p.missing.length ? ` · no prices for ${p.missing.join(', ')}` : ''}</p>
