@@ -50,9 +50,13 @@ test('a column head explains itself through its "?" without moving the table', a
   await page.goto('/standings')
   const table = page.getByRole('table')
   await expect(table).toBeVisible()
+  // The web fonts swap in when they arrive and can change the table's height by a
+  // pixel or two, so measure only once every font has loaded.
+  await page.evaluate(() => document.fonts.ready)
   const before = await table.boundingBox()
   await page.getByRole('button', { name: 'What is worst drop?' }).click()
   await expect(page.getByRole('dialog', { name: 'Worst drop' })).toContainText('maximum drawdown')
+  await page.evaluate(() => document.fonts.ready)
   expect(await table.boundingBox()).toEqual(before)
 })
 
