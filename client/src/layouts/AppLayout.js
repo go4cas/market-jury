@@ -2,6 +2,7 @@ import { html } from '@arrow-js/core'
 import { go } from '../framework/router.js'
 import { sessionState } from '../state/sessionState.js'
 import { ThemeToggle } from '../components/ThemeToggle.js'
+import { GitHubLink } from '../components/GitHubLink.js'
 import { ToastContainer } from '../components/ToastContainer.js'
 import { Link } from '../components/Link.js'
 import { TradeMasterNotice } from '../components/TradeMasterNotice.js'
@@ -12,7 +13,8 @@ const PUBLIC = [['/', 'Overview'], ['/standings', 'Standings'], ['/yesterday', '
 const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs'], ['/admin/briefing', 'Briefing pack']]
 
 // The compact top bar every screen shares: logo mark, name, navigation, the
-// Trade Master pill when Cas is logged in, and the paper-trading notice.
+// Trade Master pill when Cas is logged in, a link to the code on GitHub, the look
+// switch, and the paper-trading notice.
 /** @param {any} content */
 export function AppLayout(content) {
   const signOut = async () => {
@@ -29,10 +31,11 @@ export function AppLayout(content) {
             <span class="font-display text-lg font-bold text-fg">Market Jury</span>
           </a>
 
-          <div class="ml-auto flex items-center gap-2">
+          <div class="ml-auto flex items-center gap-1">
             ${() => sessionState.tradeMaster
               ? html`<span class="whitespace-nowrap rounded-full border border-brand px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-brand">TRADE MASTER</span>`
               : ''}
+            ${GitHubLink()}
             ${ThemeToggle()}
           </div>
 
