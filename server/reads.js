@@ -61,9 +61,9 @@ export function readRoutes({ db, now }) {
     },
 
     '/api/days/latest': {
-      GET: open(() => {
+      GET: open((req) => {
         const date = /** @type {{ d: string | null }} */ (db.query('SELECT MAX(d.trading_date) AS d FROM decisions d JOIN runs r ON r.id = d.run_id WHERE r.dry_run = 0').get()).d
-        return day(db, date)
+        return day(db, date, isTradeMaster(db, req))
       }),
     },
     '/api/days/:date': {
@@ -73,7 +73,7 @@ export function readRoutes({ db, now }) {
         if (!isTradingDay(db, date)) return error(404, `${date} was not a trading day, so nobody decided anything.`)
         const latest = /** @type {{ d: string | null }} */ (db.query('SELECT MAX(d.trading_date) AS d FROM decisions d JOIN runs r ON r.id = d.run_id WHERE r.dry_run = 0').get()).d
         if (!latest || date > latest) return error(404, `The Traders have not decided anything for ${date} yet.`)
-        return day(db, date)
+        return day(db, date, isTradeMaster(db, req))
       }),
     },
 
@@ -95,12 +95,18 @@ export function readRoutes({ db, now }) {
 
     '/api/columnist': {
       GET: open((_req, url) => {
-        const before = dateParam(url.searchParams.get('before')) ?? '9999-12-31'
-        const kind = url.searchParams.get('kind')
-        const posts = db.query(`SELECT kind, period_date AS date, headline, body FROM columnist_posts
-                                WHERE period_date < ? AND (? IS NULL OR kind = ?) ORDER BY period_date DESC, kind = 'daily' LIMIT 20`)
-          .all(before, kind === 'daily' || kind === 'weekly' ? kind : null, kind === 'daily' || kind === 'weekly' ? kind : null)
-        return { posts }
+        // The cursor is the last post seen, `YYYY-MM-DD:kind`, in the feed's own
+        // order (newest date first, a date's weekly post before its daily one).
+        // A bare date means everything on that date has been seen.
+        const [, before = '9999-12-31', seen = 'daily'] = /^(\d{4}-\d{2}-\d{2})(?::(daily|weekly))?$/.exec(url.searchParams.get('before') ?? '') ?? []
+        const kindParam = url.searchParams.get('kind')
+        const kind = kindParam === 'daily' || kindParam === 'weekly' ? kindParam : null
+        /** @type {Array<{ kind: string, date: string, headline: string, body: string }>} */
+        const posts = /** @type {any} */ (db.query(`SELECT kind, period_date AS date, headline, body FROM columnist_posts
+                                WHERE (period_date < ?1 OR (period_date = ?1 AND (kind = 'daily') > (?2 = 'daily'))) AND (?3 IS NULL OR kind = ?3)
+                                ORDER BY period_date DESC, kind = 'daily' LIMIT 20`).all(before, seen, kind))
+        const last = posts.at(-1)
+        return { posts, nextCursor: posts.length === 20 && last ? `${last.date}:${last.kind}` : null }
       }),
     },
   }
@@ -266,12 +272,17 @@ function periodEnds(db, latest) {
   return { latest, weeks, months }
 }
 
+// What visitors see when a Trader's model call failed. The raw error comes from
+// the provider and is for the Trade Master's troubleshooting only.
+export const FAILED_RUN_NOTE = "The model didn't give a usable answer, so this Trader held."
+
 /**
  * One evening's decisions and how each order turned out: the Yesterday screen.
  * @param {Database} db
  * @param {string | null} date the decision date
+ * @param {boolean} tradeMaster the Trade Master sees a failed run's raw error
  */
-function day(db, date) {
+function day(db, date, tradeMaster) {
   if (!date) return { date: null, fillDate: null, day: 0, prev: null, next: null, cards: [], counts: { orders: 0, trimmed: 0, rejected: 0 } }
   const decisionDates = 'SELECT d.trading_date FROM decisions d JOIN runs r ON r.id = d.run_id WHERE r.dry_run = 0'
   const prev = /** @type {{ d: string | null }} */ (db.query(`SELECT MAX(trading_date) AS d FROM (${decisionDates}) WHERE trading_date < ?`).get(date)).d
@@ -293,6 +304,8 @@ function day(db, date) {
                                FROM orders o LEFT JOIN fills f ON f.order_id = o.id WHERE o.run_id = ? ORDER BY o.side = 'buy', o.id`)
   const cashAfter = db.prepare('SELECT cash_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?')
 
+  const failure = (/** @type {{ error: string | null } | null} */ run) => (!run ? null : tradeMaster ? run.error ?? FAILED_RUN_NOTE : FAILED_RUN_NOTE)
+
   const counts = { orders: 0, trimmed: 0, rejected: 0 }
   const cards = traders.map((t) => {
     const d = /** @type {{ marketView: string, noTradesReason: string | null, runId: number } | null} */ (decisionOf.get(t.id, date))
@@ -309,7 +322,7 @@ function day(db, date) {
       decided: d !== null,
       marketView: d?.marketView ?? null,
       noTradesReason: d?.noTradesReason ?? null,
-      error: d ? null : /** @type {{ error: string | null } | null} */ (failedRun.get(t.id, date))?.error ?? null,
+      error: d ? null : failure(/** @type {{ error: string | null } | null} */ (failedRun.get(t.id, date))),
       orders,
       cashAfterMicro: cash?.cash_micro ?? null,
     }
@@ -325,8 +338,10 @@ function day(db, date) {
 function history(db, trackName) {
   const { start_date: start } = /** @type {{ start_date: string | null }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get())
   const latest = latestDate(db)
-  const tradesOn = db.prepare("SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND f.trading_date = ?")
-  const trimsBetween = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE verdict = 'trimmed' AND status <> 'dry_run' AND decided_on BETWEEN ? AND ?")
+  // Trades and trims are the chosen track's AI Traders' own; missed runs are the whole experiment's.
+  const tradesOn = db.prepare(`SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND t.cadence = ? AND f.trading_date = ?`)
+  const trimsBetween = db.prepare(`SELECT COUNT(*) AS n FROM orders o JOIN traders t ON t.id = o.trader_id
+                                   WHERE t.kind = 'ai' AND t.cadence = ? AND o.verdict = 'trimmed' AND o.status <> 'dry_run' AND o.decided_on BETWEEN ? AND ?`)
   const missesBetween = db.prepare("SELECT COUNT(*) AS n FROM step_runs WHERE status = 'failed' AND trading_date BETWEEN ? AND ?")
   const count = (/** @type {any} */ stmt, /** @type {string[]} */ ...args) => /** @type {{ n: number }} */ (stmt.get(...args)).n
 
@@ -354,8 +369,8 @@ function history(db, trackName) {
       best: best ? { traderId: best.traderId, name: best.name, returnPct: best.returnPct } : null,
       indexReturnPct: index?.returnPct ?? null,
       badges: badgesFor(db, 'week', last),
-      days: wd.map((d) => ({ date: d, trades: count(tradesOn, d) })),
-      trims: count(trimsBetween, first, last),
+      days: wd.map((d) => ({ date: d, trades: count(tradesOn, trackName, d) })),
+      trims: count(trimsBetween, trackName, first, last),
       misses: count(missesBetween, first, last),
     }
   })
@@ -364,13 +379,16 @@ function history(db, trackName) {
     day: dayNumber(db, latest),
     totals: {
       tradingDays: dayNumber(db, latest),
-      trades: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai'").get()).n,
-      trims: count(trimsBetween, start, latest),
+      trades: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND t.cadence = ?").get(trackName)).n,
+      trims: count(trimsBetween, trackName, start, latest),
       missedRuns: count(missesBetween, start, latest),
     },
     weeks: weeks.reverse(),
   }
 }
+
+// A Trader's page lists its latest trades; totalTrades counts them all.
+export const TRADES_SHOWN = 200
 
 /**
  * Everything about one Trader: the Trader detail and Compare screens.
@@ -407,7 +425,8 @@ function trader(db, id) {
     trades: db.query(`SELECT f.trading_date AS date, f.side, i.ticker, i.name, f.price_micro AS priceMicro, f.quantity_micro AS quantityMicro, f.amount_micro AS amountMicro,
                         o.reason, o.verdict, o.verdict_note AS verdictNote, o.decided_on AS decidedOn
                       FROM fills f JOIN orders o ON o.id = f.order_id JOIN instruments i ON i.id = f.instrument_id
-                      WHERE f.trader_id = ? ORDER BY f.trading_date DESC, f.id DESC LIMIT 200`).all(id),
+                      WHERE f.trader_id = ? ORDER BY f.trading_date DESC, f.id DESC LIMIT ${TRADES_SHOWN}`).all(id),
+    totalTrades: /** @type {{ n: number }} */ (db.query('SELECT COUNT(*) AS n FROM fills WHERE trader_id = ?').get(id)).n,
     decisions: db.query(`SELECT d.trading_date AS date, d.market_view AS marketView, d.journal, d.no_trades_reason AS noTradesReason
                          FROM decisions d JOIN runs r ON r.id = d.run_id WHERE d.trader_id = ? AND r.dry_run = 0 ORDER BY d.trading_date DESC LIMIT 30`).all(id),
     metrics: [...metrics].map(([date, m]) => ({ date, ...m })),

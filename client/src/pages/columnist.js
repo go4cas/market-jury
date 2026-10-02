@@ -23,9 +23,9 @@ function ColumnistPage() {
       ${Loadable(request, (r) => {
         const posts = [...earlier, ...r.posts]
         if (!posts.length) return html`<p class="text-fg-soft">Nothing written yet. The first recap appears after the first evening run.</p>`
-        const more = () => { earlier.push(...r.posts); ui.before = r.posts.at(-1).date }
+        const more = () => { earlier.push(...r.posts); ui.before = r.nextCursor }
         return html`${posts.map((p) => Post(p).key(`${p.kind}-${p.date}`))}
-          ${r.posts.length === 20 ? html`<button type="button" class="inline-flex min-h-11 items-center self-start font-mono text-sm text-brand underline underline-offset-4" @click="${more}">Show earlier posts</button>` : ''}`
+          ${r.nextCursor ? html`<button type="button" class="inline-flex min-h-11 items-center self-start font-mono text-sm text-brand underline underline-offset-4" @click="${more}">Show earlier posts</button>` : ''}`
       })}
     </div>
   `

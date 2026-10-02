@@ -27,7 +27,7 @@ const ROWS = [
   { label: html`Worst drop${Hint('Worst drop')}`, show: (/** @type {any} */ d) => `${(d.metrics.at(-1)?.max_drawdown_pct ?? 0).toFixed(1)}%` },
   { label: html`Cash share${Hint('Cash share', 'cash')}`, show: (/** @type {any} */ d) => pct(d.metrics.at(-1)?.cash_share_pct) },
   { label: 'Stocks held', show: (/** @type {any} */ d) => String(d.holdings.length) },
-  { label: 'Trades', show: (/** @type {any} */ d) => String(d.trades.length) },
+  { label: 'Trades', show: (/** @type {any} */ d) => String(d.totalTrades) },
   { label: html`Rule breaks${Hint('Rule breaks')}`, show: (/** @type {any} */ d) => String(d.metrics.reduce((/** @type {number} */ s, /** @type {any} */ m) => s + (m.rule_breaks ?? 0), 0)) },
 ]
 

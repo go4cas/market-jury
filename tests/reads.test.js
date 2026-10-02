@@ -147,6 +147,68 @@ describe('Gallery reads', () => {
     expect((await get('/api/columnist?kind=weekly')).body.posts).toHaveLength(1)
   })
 
+  test('history counts only the chosen track\'s trades and trims', async () => {
+    /** @param {string} cadence */
+    const fills = (cadence) => /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND t.cadence = ?").get(cadence)).n
+    expect(fills('daily')).toBeGreaterThan(0)
+    // The weekly Traders' first orders (Friday) fill after the sample week, so their track shows none.
+    for (const cadence of ['daily', 'weekly']) {
+      const { body } = await get(`/api/history?track=${cadence}`)
+      expect(body.totals.trades).toBe(fills(cadence))
+      expect(body.weeks.flatMap((/** @type {any} */ w) => w.days).reduce((/** @type {number} */ n, /** @type {any} */ d) => n + d.trades, 0)).toBe(fills(cadence))
+      expect(body.weeks.reduce((/** @type {number} */ n, /** @type {any} */ w) => n + w.trims, 0)).toBe(body.totals.trims)
+    }
+  })
+
+  test('a failed model call: visitors get a plain sentence, the Trade Master the raw error', async () => {
+    db.run('UPDATE settings SET gallery_enabled = 1')
+    db.run("INSERT INTO traders (name, kind, model_id, cadence, started_on) VALUES ('Ghost daily', 'ai', 1, 'daily', '2026-11-23')")
+    const ghost = /** @type {{ id: number }} */ (db.query("SELECT id FROM traders WHERE name = 'Ghost daily'").get()).id
+    const pack = /** @type {{ id: number }} */ (db.query("SELECT id FROM briefing_packs WHERE kind = 'daily' AND trading_date = '2026-11-27'").get()).id
+    db.run("INSERT INTO runs (kind, trader_id, model_id, pack_id, status, error, started_at) VALUES ('trader', ?, 1, ?, 'failed', 'Provider said: invalid x-api-key sk-SECRET', ?)", [ghost, pack, new Date().toISOString()])
+    try {
+      const card = (/** @type {any} */ body) => body.cards.find((/** @type {any} */ c) => c.traderId === ghost)
+      const visitor = await get('/api/days/2026-11-27', { cookie: '' })
+      expect(card(visitor.body)).toMatchObject({ decided: false, error: "The model didn't give a usable answer, so this Trader held." })
+      expect(JSON.stringify(visitor.body)).not.toContain('SECRET')
+      expect(JSON.stringify((await get('/api/days/latest', { cookie: '' })).body)).not.toContain('SECRET')
+      expect(card((await get('/api/days/2026-11-27')).body).error).toBe('Provider said: invalid x-api-key sk-SECRET')
+    } finally {
+      db.run('DELETE FROM runs WHERE trader_id = ?', [ghost])
+      db.run('DELETE FROM traders WHERE id = ?', [ghost])
+    }
+  })
+
+  test('the Columnist pages by date and kind, so a daily and weekly post on the boundary are both reached', async () => {
+    const add = db.prepare('INSERT INTO columnist_posts (kind, period_date, headline, body, created_at) VALUES (?, ?, ?, ?, ?)')
+    // 5 sample posts plus 14 more make 19 newer posts; then a weekly and a daily share 2026-10-30.
+    for (let i = 0; i < 14; i++) add.run('daily', `2026-11-${String(5 + i).padStart(2, '0')}`, 'h', 'b', new Date().toISOString())
+    add.run('weekly', '2026-10-30', 'h', 'b', new Date().toISOString())
+    add.run('daily', '2026-10-30', 'h', 'b', new Date().toISOString())
+    try {
+      const first = (await get('/api/columnist')).body
+      expect(first.posts).toHaveLength(20)
+      expect(first.nextCursor).toBe('2026-10-30:weekly')
+      const second = (await get(`/api/columnist?before=${first.nextCursor}`)).body
+      expect(second).toEqual({ posts: [expect.objectContaining({ kind: 'daily', date: '2026-10-30' })], nextCursor: null })
+      const seen = [...first.posts, ...second.posts].map((/** @type {any} */ p) => `${p.date}:${p.kind}`)
+      expect(new Set(seen).size).toBe(21)
+      // A bare date still works: everything on that date counts as seen.
+      expect((await get('/api/columnist?before=2026-11-05')).body.posts.map((/** @type {any} */ p) => p.date)).toEqual(['2026-10-30', '2026-10-30'])
+    } finally {
+      db.run("DELETE FROM columnist_posts WHERE headline = 'h' AND body = 'b'")
+    }
+  })
+
+  test('a Trader carries its total number of trades beside the latest ones', async () => {
+    const { body: list } = await get('/api/traders')
+    const claude = list.traders.find((/** @type {any} */ t) => t.name === 'Claude daily')
+    const { body } = await get(`/api/traders/${claude.id}`)
+    const n = /** @type {{ n: number }} */ (db.query('SELECT COUNT(*) AS n FROM fills WHERE trader_id = ?').get(claude.id)).n
+    expect(body.totalTrades).toBe(n)
+    expect(body.trades).toHaveLength(Math.min(n, 200))
+  })
+
   test('the briefing pack is for the Trade Master only', async () => {
     db.run('UPDATE settings SET gallery_enabled = 1')
     expect((await get('/api/admin/packs', { cookie: '' })).status).toBe(401)
