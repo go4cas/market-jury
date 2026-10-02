@@ -113,7 +113,9 @@ export function adminRoutes(ctx) {
         const date = url.searchParams.get('date') ?? dates[0] ?? null
         const pack = /** @type {{ content: string, created_at: string } | null} */ (date ? db.query('SELECT content, created_at FROM briefing_packs WHERE kind = ? AND trading_date = ?').get(kind, date) : null)
         if (date && !pack) return error(404, `There is no ${kind} briefing pack for ${date}.`)
-        return json({ kind, date, dates, createdAt: pack?.created_at ?? null, pack: pack ? JSON.parse(pack.content) : null })
+        // The pack itself stays exactly as built; company names ride alongside for the screen.
+        const names = Object.fromEntries(db.query('SELECT ticker, name FROM instruments').values().map(([t, n]) => [String(t), String(n)]))
+        return json({ kind, date, dates, createdAt: pack?.created_at ?? null, pack: pack ? JSON.parse(pack.content) : null, names })
       }),
     },
 

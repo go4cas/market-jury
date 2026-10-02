@@ -142,12 +142,16 @@ test('the Trade Master screens: settings, costs and the briefing pack', async ({
 
   await page.goto('/admin/briefing')
   await expect(page.getByRole('heading', { name: 'Headlines' })).toBeVisible()
-  await expect(page.getByRole('cell', { name: 'SPY', exact: true })).toBeVisible()
+  await expect(page.getByRole('cell', { name: /^SPY\b/ })).toBeVisible()
   // Every ticker is listed (no cut-off); the table scrolls inside its own box.
   const prices = page.getByRole('region', { name: 'Prices for every ticker' })
   const count = await prices.locator('tbody tr').count()
   await expect(page.getByText(`All ${count}, scroll to see them.`)).toBeVisible()
   expect(await prices.evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto')
+  // Each ticker carries its company name, and the search finds a name too.
+  await expect(prices.getByRole('row', { name: /AAPL Apple Inc\./ })).toBeVisible()
+  await page.getByRole('searchbox', { name: /Find a ticker or name/ }).fill('apple')
+  await expect(prices.locator('tbody tr')).toHaveCount(1)
 })
 
 test('a dry run shows each Trader\'s answer with its orders and verdicts', async ({ page }) => {

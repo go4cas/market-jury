@@ -287,7 +287,7 @@ function day(db, date) {
                                  WHERE d.trader_id = ? AND d.trading_date = ? AND r.dry_run = 0`)
   const failedRun = db.prepare(`SELECT r.error FROM runs r JOIN briefing_packs p ON p.id = r.pack_id
                                 WHERE r.kind = 'trader' AND r.trader_id = ? AND p.trading_date = ? AND r.dry_run = 0 AND r.status = 'failed' ORDER BY r.id DESC LIMIT 1`)
-  const ordersOf = db.prepare(`SELECT o.id, o.side, o.ticker, o.amount_micro AS amountMicro, o.sell_all AS sellAll, o.reason, o.verdict, o.verdict_note AS verdictNote,
+  const ordersOf = db.prepare(`SELECT o.id, o.side, o.ticker, (SELECT name FROM instruments WHERE ticker = o.ticker LIMIT 1) AS name, o.amount_micro AS amountMicro, o.sell_all AS sellAll, o.reason, o.verdict, o.verdict_note AS verdictNote,
                                  o.approved_amount_micro AS approvedAmountMicro, o.status, o.fill_note AS fillNote, o.fill_on AS fillOn,
                                  f.price_micro AS priceMicro, f.quantity_micro AS quantityMicro, f.amount_micro AS filledMicro, f.trading_date AS filledOn
                                FROM orders o LEFT JOIN fills f ON f.order_id = o.id WHERE o.run_id = ? ORDER BY o.side = 'buy', o.id`)
@@ -386,6 +386,7 @@ function trader(db, id) {
   const positions = latest ? positionsAsOf(db, id, latest) : positionsOf(db, id)
   const value = latest ? valuePortfolio(cashOf(db, id, latest), positions, (instrumentId) => closeOn(db, instrumentId, latest)) : null
   const index = /** @type {{ id: number } | null} */ (db.query("SELECT id FROM traders WHERE kind = 'benchmark' ORDER BY id LIMIT 1").get())
+  const nameOf = /** @type {import('bun:sqlite').Statement<{ name: string }, [string]>} */ (db.prepare('SELECT name FROM instruments WHERE ticker = ? LIMIT 1'))
   const valuesOf = (/** @type {number} */ traderId) => /** @type {Array<{ date: string, totalMicro: number }>} */ (db.query('SELECT trading_date AS date, total_micro AS totalMicro FROM snapshots WHERE trader_id = ? ORDER BY trading_date').all(traderId))
   const metricKeys = ['return_pct', 'vs_index_pct', 'max_drawdown_pct', 'cash_share_pct', 'positions', 'largest_position_pct', 'trades', 'turnover_pct', 'rule_breaks', 'avg_holding_days', 'losers_cut', 'added_to_loser']
   /** @type {Map<string, Record<string, number>>} */
@@ -400,10 +401,10 @@ function trader(db, id) {
     asOf: latest,
     cashMicro: value?.cash ?? null,
     totalMicro: value?.total ?? null,
-    holdings: (value?.positions ?? []).map((p) => ({ ticker: p.ticker, quantityMicro: p.quantity_micro, costBasisMicro: p.cost_basis_micro, priceMicro: p.price_micro, valueMicro: p.value_micro })),
+    holdings: (value?.positions ?? []).map((p) => ({ ticker: p.ticker, name: nameOf.get(p.ticker)?.name ?? null, quantityMicro: p.quantity_micro, costBasisMicro: p.cost_basis_micro, priceMicro: p.price_micro, valueMicro: p.value_micro })),
     values: valuesOf(id),
     indexValues: index && index.id !== id ? valuesOf(index.id) : [],
-    trades: db.query(`SELECT f.trading_date AS date, f.side, i.ticker, f.price_micro AS priceMicro, f.quantity_micro AS quantityMicro, f.amount_micro AS amountMicro,
+    trades: db.query(`SELECT f.trading_date AS date, f.side, i.ticker, i.name, f.price_micro AS priceMicro, f.quantity_micro AS quantityMicro, f.amount_micro AS amountMicro,
                         o.reason, o.verdict, o.verdict_note AS verdictNote, o.decided_on AS decidedOn
                       FROM fills f JOIN orders o ON o.id = f.order_id JOIN instruments i ON i.id = f.instrument_id
                       WHERE f.trader_id = ? ORDER BY f.trading_date DESC, f.id DESC LIMIT 200`).all(id),

@@ -6,6 +6,7 @@ import { navigate } from '../utils/nav.js'
 import { PageHeader } from './PageHeader.js'
 import { Segmented } from './Segmented.js'
 import { Term } from './Term.js'
+import { Ticker } from './Ticker.js'
 import { TraderMark } from './TraderMark.js'
 
 /**
@@ -13,6 +14,7 @@ import { TraderMark } from './TraderMark.js'
  * @property {number} id
  * @property {'buy' | 'sell'} side
  * @property {string} ticker
+ * @property {string | null} name the company's name
  * @property {number | null} amountMicro
  * @property {boolean} sellAll
  * @property {string} reason
@@ -66,6 +68,7 @@ function OrderBlock(o, fillDate) {
       <h3 class="font-display text-xl font-semibold leading-7 text-fg">${title(o, fillDate)}</h3>
       <span class="shrink-0 rounded-control border border-line-strong px-2 py-0.5 font-mono text-xs font-semibold text-fg">${o.side.toUpperCase()}</span>
     </div>
+    ${o.name ? html`<p class="text-sm">${Ticker(o.ticker, o.name)}</p>` : ''}
     <p class="${quote}">“${o.reason}”</p>
     ${notes(o)}
     ${o.status === 'filled' ? html`<p class="flex flex-wrap gap-x-4 font-mono text-[13px] text-fg-soft"><span>${shares(o.quantityMicro ?? 0)} shares</span><span>Filled ${day(o.filledOn)} ${Term('at the open')}</span></p>` : ''}

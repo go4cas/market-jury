@@ -6,6 +6,7 @@ import { fresh, Loadable } from '../../components/Loadable.js'
 import { PageHeader } from '../../components/PageHeader.js'
 import { Segmented } from '../../components/Segmented.js'
 import { Term } from '../../components/Term.js'
+import { Ticker } from '../../components/Ticker.js'
 import { day } from '../../utils/format.js'
 import { formatClock, viewerTimeZone, zoneLabel } from '../../utils/time.js'
 
@@ -50,14 +51,14 @@ function BriefingPage() {
             <ul class="flex flex-col">${p.headlines.map((/** @type {any} */ h) => html`<li class="border-t border-line py-2 text-[15px] text-fg">${h.headline}<span class="block font-mono text-xs text-fg-soft">${h.source} · ${at(h.publishedAt)}${h.tickers.length ? ` · ${h.tickers.join(', ')}` : ''}</span></li>`)}</ul>
           </section>
           <section class="flex flex-col gap-2"><h2 class="font-display text-2xl font-semibold text-fg">Prices</h2>
-            <label class="block sm:max-w-xs"><span class="prompt">Find a ticker</span><input class="mt-1.5 min-h-11 w-full rounded-control border border-line-strong bg-surface-inset px-3 font-mono text-[15px] text-fg outline-none focus:border-brand focus:bg-surface-raised" type="search" @input="${/** @param {Event} e */ (e) => { ui.query = /** @type {HTMLInputElement} */ (e.target).value.trim().toUpperCase() }}" /></label>
+            <label class="block sm:max-w-xs"><span class="prompt">Find a ticker or name</span><input class="mt-1.5 min-h-11 w-full rounded-control border border-line-strong bg-surface-inset px-3 font-mono text-[15px] text-fg outline-none focus:border-brand focus:bg-surface-raised" type="search" @input="${/** @param {Event} e */ (e) => { ui.query = /** @type {HTMLInputElement} */ (e.target).value.trim().toLowerCase() }}" /></label>
             ${() => {
-              const rows = p.prices.rows.filter((/** @type {any[]} */ row) => !ui.query || String(row[0]).startsWith(ui.query))
+              const rows = p.prices.rows.filter((/** @type {any[]} */ row) => !ui.query || String(row[0]).toLowerCase().startsWith(ui.query) || String(r.names[row[0]] ?? '').toLowerCase().includes(ui.query))
               // Every ticker is listed; the table scrolls inside its own box, header kept in view.
               return fresh(ui.query, html`<p class="text-sm text-fg-soft">${ui.query ? `${rows.length} of ${p.prices.rows.length} match.` : `All ${p.prices.rows.length}, scroll to see them.`}</p>
               <div class="max-h-[32rem] overflow-auto overscroll-contain rounded-control border border-line" tabindex="0" role="region" aria-label="Prices for every ticker"><table class="w-full min-w-max border-collapse">
                 <thead class="sticky top-0 bg-surface-raised"><tr><th scope="col" class="${th}">Ticker</th><th scope="col" class="${`${th} text-right`}">Open</th><th scope="col" class="${`${th} text-right`}">Close</th><th scope="col" class="${`${th} text-right`}">${p.kind === 'weekly' ? 'Week' : 'Day'}</th><th scope="col" class="${`${th} text-right`}">Month</th></tr></thead>
-                <tbody>${rows.map((/** @type {any[]} */ row) => html`<tr><td class="border-t border-line px-2 py-2 font-mono text-sm text-fg">${row[0]}</td><td class="${td}">${row[col('open')].toFixed(2)}</td><td class="${td}">${row[col('close')].toFixed(2)}</td><td class="${td}">${Delta(row[col(change)])}</td><td class="${td}">${Delta(row[col('chg_1m')])}</td></tr>`.key(row[0]))}</tbody>
+                <tbody>${rows.map((/** @type {any[]} */ row) => html`<tr><td class="border-t border-line px-2 py-2 text-sm">${Ticker(row[0], r.names[row[0]])}</td><td class="${td}">${row[col('open')].toFixed(2)}</td><td class="${td}">${row[col('close')].toFixed(2)}</td><td class="${td}">${Delta(row[col(change)])}</td><td class="${td}">${Delta(row[col('chg_1m')])}</td></tr>`.key(row[0]))}</tbody>
               </table></div>`)
             }}
           </section>
