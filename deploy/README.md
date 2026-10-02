@@ -160,5 +160,12 @@ sudo systemctl stop market-jury
 cd /srv/market-jury/data
 for f in market-jury.sqlite*; do sudo mv "$f" "before-restore-$f"; done
 gunzip -c ~/<time>.sqlite.gz | sudo -u marketjury tee market-jury.sqlite > /dev/null
+sudo -u marketjury sqlite3 market-jury.sqlite "DELETE FROM sessions;"
 sudo systemctl start market-jury
 ```
+
+The `DELETE FROM sessions` line logs everyone out of the restored copy: the snapshot still
+holds the logins that were open when it was taken, including ones you have since logged out of,
+and they would work again. Log in afresh afterwards. If you are restoring because you think
+someone got in, also run `mj run trade-master:setup` to set a new password and authenticator
+code, since the snapshot brings back the old ones.
