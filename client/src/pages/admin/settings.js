@@ -14,7 +14,7 @@ import { TraderName } from '../../components/TraderMark.js'
 import { send } from '../../utils/api.js'
 import { day, usd } from '../../utils/format.js'
 import { displayName } from '../../utils/traders.js'
-import { formatClock, NY_TIME_ZONE, viewerTimeZone, zoneLabel } from '../../utils/time.js'
+import { formatClock, howLong, NY_TIME_ZONE, viewerTimeZone, zoneLabel } from '../../utils/time.js'
 
 export const meta = { layout: 'app', title: 'Settings · Market Jury' }
 
@@ -254,7 +254,7 @@ function ExperimentControl(s, { act, dryRun, running, lineUp }) {
 }
 
 /**
- * "Last dry run Thu 21:40 SAST · 8 Traders · $0.31 · See result".
+ * "Last dry run Thu 21:40 SAST · 8 Traders · 2m 14s · $0.31 · See result".
  * @param {any} r the dry run's state
  * @param {() => void} seeResult
  */
@@ -262,9 +262,10 @@ function LastDryRun(r, seeResult) {
   if (!r || (!r.result && !r.error && !r.running)) return ''
   const link = html`<button type="button" class="font-mono text-brand underline underline-offset-4" @click="${seeResult}">See result</button>`
   if (r.running) return html`<p class="font-mono text-[13px] text-fg-soft" role="status">Dry run going since ${when(r.startedAt)}. Every Trader is deciding.</p>`
-  if (r.error) return html`<p class="font-mono text-[13px] text-fg-soft">Last dry run ${when(r.finishedAt)} failed · ${link}</p>`
+  const took = howLong(r.startedAt, r.finishedAt)
+  if (r.error) return html`<p class="font-mono text-[13px] text-fg-soft">Last dry run ${when(r.finishedAt)} failed${took ? ` after ${took}` : ''} · ${link}</p>`
   const cost = r.result.results.reduce((/** @type {number} */ sum, /** @type {any} */ x) => sum + (x.costMicro ?? 0), 0)
-  return html`<p class="font-mono text-[13px] text-fg-soft">Last dry run ${when(r.finishedAt)} · ${r.result.results.length} Traders · ${usd(cost)} · ${link}</p>`
+  return html`<p class="font-mono text-[13px] text-fg-soft">Last dry run ${when(r.finishedAt)} · ${r.result.results.length} Traders · ${took ? `${took} · ` : ''}${usd(cost)} · ${link}</p>`
 }
 
 /**
