@@ -184,9 +184,6 @@ button, a, input {
 
 /* ── Market Jury components that utilities can't express ── */
 
-/* MarketStatus "opens soon": a half-filled dot. */
-.mj-dot-half { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }
-
 /* Popover: glossary terms and "?" hints. Placed by place() in components/Term.js. */
 .mj-pop[popover] {
   position: fixed; inset: auto; margin: 0; max-width: 320px; box-sizing: border-box;

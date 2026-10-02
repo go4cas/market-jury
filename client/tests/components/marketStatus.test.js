@@ -8,7 +8,7 @@ describe('market status wording', () => {
   })
 
   it('counts down the hour before the open', () => {
-    expect(marketWhen('soon', '2026-11-27T14:30:00.000Z', Date.parse('2026-11-27T13:48:00Z'))).toBe('in 42 min')
+    expect(marketWhen('soon', '2026-11-27T14:30:00.000Z', Date.parse('2026-11-27T13:48:00Z'))).toBe('opens in 42 min')
   })
 
   it('names the next open when closed, and says so on a holiday', () => {

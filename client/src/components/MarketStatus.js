@@ -3,7 +3,7 @@ import { formatClock, NY_TIME_ZONE } from '../utils/time.js'
 
 const LOOK = /** @type {Record<string, { box: string, dot: string, word: string }>} */ ({
   open: { box: 'border-good bg-good-wash text-good', dot: 'bg-current', word: 'Market open' },
-  soon: { box: 'border-warn text-warn', dot: 'mj-dot-half', word: 'Opens soon' },
+  soon: { box: 'border-bad bg-bad-wash text-bad', dot: '', word: 'Market closed' },
   closed: { box: 'border-bad bg-bad-wash text-bad', dot: '', word: 'Market closed' },
   holiday: { box: 'border-bad bg-bad-wash text-bad', dot: '', word: 'Market closed' },
 })
@@ -24,13 +24,14 @@ export function marketWhen(market, changesAt, now) {
   if (!changesAt) return market === 'holiday' ? 'holiday' : ''
   const at = new Date(changesAt)
   if (market === 'open') return `closes ${formatClock(at, NY_TIME_ZONE)} NY`
-  if (market === 'soon') return `in ${Math.max(1, Math.ceil((at.getTime() - now) / 60_000))} min`
+  if (market === 'soon') return `opens in ${Math.max(1, Math.ceil((at.getTime() - now) / 60_000))} min`
   return `${market === 'holiday' ? 'holiday · ' : ''}opens ${nyWhen(at)}`
 }
 
 // The New York market's state as a pill: colour, dot shape and words all say the
-// same thing, so it reads without colour: green open (filled dot), amber the hour
-// before the open (half dot), red closed (hollow dot). Cas chose red for closed.
+// same thing, so it reads without colour: green and a filled dot when open, red and
+// a hollow dot when closed (Cas's choice). In the hour before the open the closed
+// pill counts down ("opens in 42 min").
 /**
  * @param {{ market: string, changesAt: string | null, now: number }} props
  */
