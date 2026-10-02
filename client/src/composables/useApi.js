@@ -1,4 +1,5 @@
-import { reactive, watch, onCleanup } from '@arrow-js/core'
+import { reactive, watch } from '@arrow-js/core'
+import { onLeave } from '../framework/lifecycle.js'
 
 /**
  * Like useFetch, for an address that changes: give it a function that builds
@@ -48,7 +49,7 @@ export function useApi(url) {
     current = next
     if (next) execute()
   })
-  try { onCleanup(() => { stop(); controller?.abort() }) } catch {}
+  onLeave(() => { stop(); controller?.abort() })
 
   return {
     data: () => state.data,

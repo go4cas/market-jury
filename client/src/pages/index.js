@@ -1,5 +1,5 @@
-import { html, reactive, onCleanup } from '@arrow-js/core'
-import { useMeta } from '../framework/index.js'
+import { html, reactive } from '@arrow-js/core'
+import { onLeave, useMeta } from '../framework/index.js'
 import { useFetch } from '../composables/useFetch.js'
 import { Delta } from '../components/Delta.js'
 import { LandingHero } from '../components/LandingHero.js'
@@ -35,11 +35,22 @@ function OverviewPage() {
 
   // Keep a number in reactive state: arrow-js proxies objects, and a proxied Date breaks Intl.
   const clock = reactive({ now: Date.now() })
-  const timer = setInterval(() => { clock.now = Date.now() }, 15_000)
-  try { onCleanup(() => clearInterval(timer)) } catch {}
-
   const ui = reactive({ track: 'daily' })
   const overview = useFetch('/api/overview')
+  // Ask the server again once the market's state is due to change (or, while
+  // closed, once the hour before the open starts), once per change.
+  let asked = ''
+  const timer = setInterval(() => {
+    clock.now = Date.now()
+    const status = overview.data()?.status
+    const at = status?.changesAt ? Date.parse(status.changesAt) : NaN
+    const due = clock.now >= at || (status?.market === 'closed' && at - clock.now <= 60 * 60_000)
+    if (due && asked !== `${status.market} ${status.changesAt}`) {
+      asked = `${status.market} ${status.changesAt}`
+      overview.refetch()
+    }
+  }, 15_000)
+  onLeave(() => clearInterval(timer))
   const daily = useFetch('/api/series?track=daily')
   const weekly = useFetch('/api/series?track=weekly', { immediate: false })
   const pickTrack = (/** @type {string} */ t) => {
