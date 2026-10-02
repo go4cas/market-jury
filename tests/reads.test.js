@@ -100,6 +100,7 @@ describe('Gallery reads', () => {
     expect(card).toMatchObject({ name: 'Claude daily', decided: true, marketView: traderAnswer.market_view })
     // By Friday Apple is at the 20% cap, so the Compliance Desk rejects more of it; the reason stays verbatim.
     expect(card.orders[0]).toMatchObject({ reason: traderAnswer.orders[0].reason, verdict: 'rejected', verdictNote: expect.stringContaining('20% position cap') })
+    expect(card.orders[0]).toMatchObject({ ticker: 'AAPL', name: 'Apple Inc.' })
     expect(body.counts.rejected).toBeGreaterThan(0)
 
     const tuesday = (await get('/api/days/2026-11-24')).body
@@ -132,6 +133,9 @@ describe('Gallery reads', () => {
     expect(body.values.map((/** @type {any} */ v) => v.date)).toEqual(['2026-11-23', '2026-11-24', '2026-11-25', '2026-11-27'])
     expect(body.indexValues).toHaveLength(3)
     expect(body.trades[0]).toHaveProperty('reason')
+    // Holdings and trades carry the company's name beside the ticker.
+    expect(body.holdings.every((/** @type {any} */ h) => typeof h.name === 'string' && h.name.length > 0)).toBe(true)
+    expect(body.trades[0].name).toEqual(expect.any(String))
     expect(body.decisions[0]).toMatchObject({ date: '2026-11-27', journal: traderAnswer.journal })
     expect(body.metrics.at(-1)).toHaveProperty('cash_share_pct')
     expect((await get('/api/traders/999')).status).toBe(404)
@@ -149,6 +153,7 @@ describe('Gallery reads', () => {
     const { body } = await get('/api/admin/packs?date=2026-11-24')
     expect(body).toMatchObject({ kind: 'daily', date: '2026-11-24', dates: ['2026-11-27', '2026-11-25', '2026-11-24', '2026-11-23'] })
     expect(body.pack.prices.columns[0]).toBe('ticker')
+    expect(body.names.AAPL).toBe('Apple Inc.')
     expect((await get('/api/admin/packs?date=2026-11-26')).status).toBe(404)
   })
 })

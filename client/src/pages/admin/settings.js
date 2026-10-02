@@ -9,6 +9,7 @@ import { fresh, Loadable } from '../../components/Loadable.js'
 import { PageHeader } from '../../components/PageHeader.js'
 import { stepName } from '../../components/TradeMasterNotice.js'
 import { Term } from '../../components/Term.js'
+import { Ticker } from '../../components/Ticker.js'
 import { TraderName } from '../../components/TraderMark.js'
 import { send } from '../../utils/api.js'
 import { day, usd } from '../../utils/format.js'
@@ -418,7 +419,7 @@ function MenuPanel(menu, act) {
       const hits = menu.filter((m) => !ui.query || m.ticker.toLowerCase().startsWith(ui.query) || m.name.toLowerCase().includes(ui.query))
       return fresh(ui.query, html`<p class="text-sm text-fg-soft">${ui.query ? `${hits.length} of ${menu.length} match.` : `All ${menu.length}, scroll to see them.`}</p>
       <ul class="flex max-h-[28rem] flex-col overflow-y-auto overscroll-contain rounded-control border border-line px-3" tabindex="0" aria-label="Stocks and funds">${hits.map((m) => html`<li class="flex items-center justify-between gap-2 border-t border-line py-1.5 text-sm first:border-t-0">
-        <span><span class="font-mono font-semibold text-fg">${m.ticker}</span> <span class="text-fg-soft">${m.name}</span></span>
+        <span>${Ticker(m.ticker, m.name)}</span>
         <button type="button" class="${btnSecondary}" @click="${() => act('PATCH', '/api/admin/menu', { ticker: m.ticker, onMenu: !m.on_menu }, m.on_menu ? `${m.ticker} is off the list from now.` : `${m.ticker} is back on the list.`)}">${m.on_menu ? 'Take off' : 'Put back'}</button>
       </li>`.key(m.ticker))}</ul>`)
     }}`
