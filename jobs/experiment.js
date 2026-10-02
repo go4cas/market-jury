@@ -11,10 +11,27 @@ import { floorRunnerDue, openingBellDue } from './schedule.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 
+/** The paper phase runs three months: about 63 trading days after the start evening. */
+export const PAPER_PHASE_DAYS = 63
+
+/**
+ * The last trading day of the paper phase: day 63 after the start evening.
+ * @param {Database} db
+ * @param {string} startDate
+ * @returns {string | null} null when the calendar doesn't reach that far
+ */
+export function lastDayFor(db, startDate) {
+  const row = /** @type {{ date: string } | null} */ (
+    db.query("SELECT date FROM trading_days WHERE calendar = 'XNYS' AND date > ? ORDER BY date LIMIT 1 OFFSET ?").get(startDate, PAPER_PHASE_DAYS - 1)
+  )
+  return row?.date ?? null
+}
+
 /**
  * @typedef {object} Settings
  * @property {'setup' | 'running' | 'paused' | 'ended'} experiment_state
  * @property {string | null} start_date
+ * @property {string | null} end_date the paper phase's last trading day; the experiment pauses itself after its evening
  * @property {number} starting_cash_micro
  * @property {number} budget_ceiling_micro
  * @property {number} gallery_enabled
@@ -99,7 +116,7 @@ export function startExperiment(db, { now, date }) {
   db.transaction(() => {
     db.run("UPDATE traders SET started_on = ? WHERE kind = 'ai' AND started_on IS NULL AND status = 'active'", [startDate])
     createIndex(db, { startedOn: dayOne, cashMicro: s.starting_cash_micro, now })
-    db.run("UPDATE settings SET experiment_state = 'running', start_date = ?, updated_at = ? WHERE id = 1", [startDate, now.toISOString()])
+    db.run("UPDATE settings SET experiment_state = 'running', start_date = ?, end_date = ?, updated_at = ? WHERE id = 1", [startDate, lastDayFor(db, startDate), now.toISOString()])
   })()
   return { startDate, dayOne }
 }
@@ -116,11 +133,14 @@ export function pauseExperiment(db, now) {
 
 /**
  * Resume: orders that were waiting for a skipped open fill at the next one.
+ * Resuming after the paper phase's last day carries on with no end date.
  * @param {Database} db
  * @param {Date} now
  */
 export function resumeExperiment(db, now) {
-  if (settings(db).experiment_state !== 'paused') throw new Error('Only a paused experiment can be resumed.')
+  const s = settings(db)
+  if (s.experiment_state !== 'paused') throw new Error('Only a paused experiment can be resumed.')
+  if (s.end_date && marketDate(now) >= s.end_date) db.run('UPDATE settings SET end_date = NULL WHERE id = 1')
   const today = marketDate(now)
   const due = openingBellDue(db, today)
   const nextOpen = isTradingDay(db, today) && due && due > now ? today : nextTradingDay(db, today)

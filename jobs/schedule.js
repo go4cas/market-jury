@@ -81,6 +81,9 @@ const experimentState = (db) => /** @type {{ experiment_state: string }} */ (db.
  */
 async function runTraders(ctx, date, cadence) {
   const { db } = ctx
+  const { end_date: endDate } = /** @type {{ end_date: string | null }} */ (db.query('SELECT end_date FROM settings WHERE id = 1').get())
+  // Orders decided on the last evening would fill after the end, so there are none.
+  if (endDate && date >= endDate) return { skipped: `Skipped: ${date} is the last day of the three-month paper phase, so the ${cadence} Traders don't decide tonight.` }
   if (!mayRun(budget(db, ctx.now()), `${cadence} trader`)) return { skipped: `Skipped: the month's projected spend has reached the budget ceiling, so the ${cadence} Traders pause.` }
   const pack = /** @type {{ id: number } | null} */ (db.query('SELECT id FROM briefing_packs WHERE kind = ? AND trading_date = ?').get(cadence, date))
   if (!pack) throw new Error(`There is no ${cadence} briefing pack for ${date}.`)
@@ -182,11 +185,12 @@ export const STEPS = /** @type {Step[]} */ ([
  * @returns {Array<{ step: Step, date: string }>}
  */
 export function dueSteps(db, now) {
-  const { start_date: startDate } = /** @type {{ start_date: string | null }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get())
+  const { start_date: startDate, end_date: endDate } = /** @type {{ start_date: string | null, end_date: string | null }} */ (db.query('SELECT start_date, end_date FROM settings WHERE id = 1').get())
   if (!startDate) return []
   const runOf = db.prepare('SELECT step, trading_date, status, attempt, started_at, finished_at, error FROM step_runs WHERE step = ? AND trading_date = ?')
   const due = []
-  for (const date of tradingDaysBetween(db, startDate, marketDate(now))) {
+  const today = marketDate(now)
+  for (const date of tradingDaysBetween(db, startDate, endDate && endDate < today ? endDate : today)) {
     let unfinished = false
     /** @type {Map<string, StepRun | null>} */
     const runs = new Map(STEPS.map((s) => [s.name, /** @type {StepRun | null} */ (runOf.get(s.name, date))]))
@@ -251,7 +255,31 @@ export async function tick(ctx) {
       done.push({ step: step.name, date, status: 'failed', note: message })
     }
   }
+  const ended = finishPaperPhase(db, ctx.now())
+  if (ended) done.push({ step: 'end', date: ended, status: 'paused', note: 'The three-month paper phase is over, so the experiment paused itself.' })
   return done
+}
+
+/**
+ * Once every step of the paper phase's last day is done, pause the experiment.
+ * @param {Database} db
+ * @param {Date} now
+ * @returns {string | null} the last day, when it paused just now
+ */
+function finishPaperPhase(db, now) {
+  const s = /** @type {{ experiment_state: string, start_date: string | null, end_date: string | null }} */ (db.query('SELECT experiment_state, start_date, end_date FROM settings WHERE id = 1').get())
+  if (s.experiment_state !== 'running' || !s.end_date || !s.start_date) return null
+  const endDate = s.end_date
+  const startDate = s.start_date
+  const status = db.prepare('SELECT status FROM step_runs WHERE step = ? AND trading_date = ?')
+  const finished = STEPS.every((step) => {
+    if (step.runsOn && !step.runsOn(db, endDate, startDate)) return true
+    const r = /** @type {{ status: string } | null} */ (status.get(step.name, endDate))
+    return r?.status === 'succeeded' || r?.status === 'skipped'
+  })
+  if (!finished) return null
+  db.run("UPDATE settings SET experiment_state = 'paused', updated_at = ? WHERE id = 1", [now.toISOString()])
+  return endDate
 }
 
 /**

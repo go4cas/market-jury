@@ -254,6 +254,38 @@ describe('keeping the days in order', () => {
   })
 })
 
+describe('the end of the paper phase', () => {
+  test('after the last day the experiment pauses itself; resuming carries on with no end', async () => {
+    startOnMonday()
+    // Day 63 is far off, so the test moves the end to Wednesday, day 2.
+    db.run("UPDATE settings SET end_date = '2026-11-25'")
+    at('2026-11-27T20:00:00Z')
+    const r = await tick(context())
+    expect(steps('2026-11-25')).toEqual([
+      { step: 'opening-bell', status: 'succeeded' }, { step: 'floor-runner', status: 'succeeded' },
+      { step: 'daily-traders', status: 'skipped' }, { step: 'daily-recap', status: 'succeeded' },
+    ])
+    expect(steps('2026-11-27')).toEqual([])
+    expect(r.at(-1)).toMatchObject({ step: 'end', date: '2026-11-25', status: 'paused' })
+    expect(db.query('SELECT experiment_state FROM settings').get()).toEqual({ experiment_state: 'paused' })
+    // Nothing was decided on the last evening, so nothing waits to fill after it.
+    expect(db.query("SELECT COUNT(*) AS n FROM orders WHERE status = 'queued'").get()).toEqual({ n: 0 })
+
+    resumeExperiment(db, clock)
+    expect(db.query('SELECT experiment_state, end_date FROM settings').get()).toEqual({ experiment_state: 'running', end_date: null })
+    await tick(context())
+    expect(steps('2026-11-27').map((x) => /** @type {any} */ (x).step)).toContain('daily-traders')
+  })
+
+  test('starting sets the last day to the 63rd trading day after the start evening', () => {
+    saveCalendar(db, calendar2026())
+    at('2026-09-14T15:00:00Z')
+    const { startDate } = startExperiment(db, { now: clock })
+    const days = db.query("SELECT date FROM trading_days WHERE date > ? ORDER BY date LIMIT 63").values(startDate).flat()
+    expect(db.query('SELECT end_date FROM settings').get()).toEqual({ end_date: days.length === 63 ? days[62] : null })
+  })
+})
+
 describe('the dry run', () => {
   test('builds a pack if there is none, and every Trader decides without anything being queued', async () => {
     at('2026-11-24T22:00:00Z')

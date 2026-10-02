@@ -6,6 +6,7 @@ import { closeInstant, firstTradingDayOfWeek, isLastTradingDayOfWeek, isTradingD
 import { closeOn, positionsOf, valuePortfolio, cashOf } from '../core/portfolio.js'
 import { positionsAsOf } from '../core/books.js'
 import { badgesFor, periodStart, standings } from '../core/standings.js'
+import { PAPER_PHASE_DAYS } from '../jobs/experiment.js'
 import { isTradeMaster } from './auth.js'
 import { error, json } from './http.js'
 
@@ -180,8 +181,6 @@ export function marketStatus(db, at) {
   return { market: !open && weekday >= 1 && weekday <= 5 ? 'holiday' : 'closed', changesAt: next ? openInstant(db, next)?.toISOString() ?? null : null }
 }
 
-/** The paper phase runs three months: about 63 trading days. */
-const TOTAL_DAYS = 63
 
 /**
  * What the landing hero shows: the line-up size, the starting cash, trades so
@@ -199,7 +198,7 @@ function hero(db, latest) {
   return {
     traders: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM traders WHERE kind = 'ai' AND status <> 'retired'").get()).n,
     startingCashMicro,
-    totalDays: TOTAL_DAYS,
+    totalDays: PAPER_PHASE_DAYS,
     trades: /** @type {{ n: number }} */ (db.query('SELECT COUNT(*) AS n FROM fills').get()).n,
     daily: daily.map((t) => ({
       ...t,
