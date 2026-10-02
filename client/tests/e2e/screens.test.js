@@ -129,3 +129,35 @@ test('a visitor reads the Gallery once the Trade Master opens it, but not the Tr
   await page.getByRole('button', { name: 'Save settings' }).click()
   await expect(page.getByText('Settings saved.')).toBeVisible()
 })
+
+test('The cast explains who does what, with each Trader in its colour', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('link', { name: 'The cast' }).click()
+  await expect(page.getByRole('heading', { name: 'The cast', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Compliance Desk' })).toBeVisible()
+  // The icons are drawn as real SVG shapes, so they take up room on the page.
+  const shape = await page.getByRole('main').locator('svg path').first().boundingBox()
+  expect(shape?.width).toBeGreaterThan(0)
+  await expect(page.getByText('Daily + Weekly')).toHaveCount(4)
+})
+
+test('Settings lists every stock in a scrolling box, with short boxes for numbers', async ({ page }) => {
+  await page.goto('/admin/settings')
+  const list = page.getByRole('list', { name: 'Stocks and funds' })
+  await expect(list.getByRole('listitem').first()).toBeVisible()
+  // Every stock is listed (no cut-off); a long list scrolls inside its box.
+  const count = await list.getByRole('listitem').count()
+  await expect(page.getByText(`All ${count}, scroll to see them.`)).toBeVisible()
+  expect(await list.evaluate((el) => getComputedStyle(el).overflowY)).toBe('auto')
+  const budget = await page.getByRole('spinbutton', { name: /Monthly budget/ }).boundingBox()
+  expect(budget?.width).toBeLessThan(200)
+})
+
+test('the Overview clock shows New York and the reader\'s own time zone', async ({ browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL, timezoneId: 'Australia/Sydney' })
+  await context.addCookies([{ name: 'mj_session', value: E2E_SESSION_TOKEN, url: String(baseURL), httpOnly: true, secure: true, sameSite: 'Strict' }])
+  const page = await context.newPage()
+  await page.goto('/')
+  await expect(page.getByTestId('dateline')).toContainText(/NY \d\d:\d\d · AE[DS]T \d\d:\d\d/)
+  await context.close()
+})

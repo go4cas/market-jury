@@ -9,9 +9,21 @@ import { Term } from '../components/Term.js'
 import { ValueChart } from '../components/ValueChart.js'
 import { day } from '../utils/format.js'
 import { navigate } from '../utils/nav.js'
-import { formatClock, formatDateline, NY_TIME_ZONE, SA_TIME_ZONE } from '../utils/time.js'
+import { formatClock, formatDateline, NY_TIME_ZONE, viewerTimeZone, zoneLabel } from '../utils/time.js'
 
 export const meta = { layout: 'app', title: 'Market Jury' }
+
+const here = viewerTimeZone()
+
+/**
+ * "NY 02:32 · SAST 08:32": the market's clock, then the reader's own (just one when they match).
+ * @param {Date} now
+ */
+function clockLine(now) {
+  const ny = `NY ${formatClock(now, NY_TIME_ZONE)}`
+  const mine = `${zoneLabel(now, here)} ${formatClock(now, here)}`
+  return formatClock(now, here) === formatClock(now, NY_TIME_ZONE) ? ny : `${ny} · ${mine}`
+}
 
 const link = 'inline-flex min-h-11 items-center font-mono text-sm text-brand underline underline-offset-4'
 
@@ -39,9 +51,9 @@ function OverviewPage() {
         <h1 class="font-display text-4xl font-bold tracking-tight text-fg sm:text-5xl">Market Jury</h1>
         <p class="prompt prompt-caret">4 AI traders | 1 market | you are the jury</p>
         <div class="prompt flex flex-wrap gap-x-4 gap-y-1" data-testid="dateline">
-          <span>${() => formatDateline(new Date(clock.now), SA_TIME_ZONE)}</span>
+          <span>${() => formatDateline(new Date(clock.now), here)}</span>
           ${() => (overview.data()?.status.day ? html`<span>Day ${overview.data().status.day}</span>` : '')}
-          <span>NY ${() => formatClock(new Date(clock.now), NY_TIME_ZONE)} · SAST ${() => formatClock(new Date(clock.now), SA_TIME_ZONE)}</span>
+          <span>${() => clockLine(new Date(clock.now))}</span>
           ${() => (overview.data() ? html`<span class="text-fg">Market ${overview.data().status.market}</span>` : '')}
         </div>
       </header>

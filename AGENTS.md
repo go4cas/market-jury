@@ -71,7 +71,7 @@ Environment (see `.env.example`): `PORT`, `DATABASE_PATH`, `CLIENT_DIR`, `ALPACA
 ## Data conventions
 
 - **Money is INTEGER micro-dollars** (`$1 = 1_000_000`), in columns ending `_micro`. Share quantities are INTEGER micro-shares (`quantity_micro`, 6 decimal places). Never store money or quantities as floats; convert only for display.
-- Trading dates are `TEXT 'YYYY-MM-DD'` in the market's calendar (New York). Timestamps are ISO-8601 UTC text. The client shows South African time ("Wed 15:35") plus New York time where the market matters (`client/src/utils/time.js`).
+- Trading dates are `TEXT 'YYYY-MM-DD'` in the market's calendar (New York). Timestamps are ISO-8601 UTC text. The client shows each reader their own time zone with its short name ("SAST 08:32", "AEDT 17:32", via `zoneLabel()`), plus New York time where the market matters (`client/src/utils/time.js`). Never hard-code a reader's zone.
 - **Migrations**: add `db/migrations/NNNN_short_name.sql` (next number, zero-padded). Never edit a migration that has merged; add a new one. `migrate()` runs each pending file in a transaction on every start.
 - "Built to grow": `asset_class`, `market`, `currency`, `calendar`, `direction`, `order_type` and per-Trader `rule_sets` stay open TEXT/JSON so shorts, crypto or limit orders need no migration. Behaviour metrics are rows in `metrics` (new metric = new key).
 - Nothing is ever deleted: history screens read stored rows. Briefing packs are immutable once built.
@@ -111,7 +111,7 @@ These are non-obvious constraints. Violating them causes silent bugs or runtime 
 ### Pages, layouts, guards
 
 - File `client/src/pages/path.js` → route `/path`; `[param].js` is a dynamic segment (read with `useRoute().params()`); `not-found.js` handles 404. Export `meta = { layout: 'app' | 'basic', title }` and call `useMeta({ title })`.
-- Layout `'app'`: the shared top bar (logo mark, name, nav, TRADE MASTER pill, Terminal/Daylight toggle) and the "Virtual money only. Not financial advice." footer. Layout `'basic'`: a centred panel (login, not found).
+- Layout `'app'`: the shared top bar (logo mark, name, TRADE MASTER pill and Terminal/Daylight toggle on the first row; the nav on its own scrolling row) and the "Virtual money only. Not financial advice." footer. Layout `'basic'`: a centred panel (login, not found).
 - Access rules are one pure function, `routeGuard()` in `client/src/state/sessionState.js`, registered in `main.js`: `/admin/*` is Trade Master only; everything else needs the Gallery open or the Trade Master. The server enforces the same rules; the client guard is only for navigation.
 - Composables: `useFetch` for API calls (do not hand-roll fetch + loading state), `useApi(() => url)` when the address follows reactive state (it refetches on change and keeps the server's plain-language error), `send()` in `utils/api.js` for writes, `useForm` for forms, `useToast` for notifications, `useRoute`/`useRouter` for navigation. Call them inside page/component functions.
 - State modules: module-scope `reactive({...})` singletons in `client/src/state/`.

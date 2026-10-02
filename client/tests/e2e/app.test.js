@@ -39,7 +39,7 @@ test('the Trade Master signs in, sees the Overview, and signs out', async ({ pag
   await expect(page).toHaveURL('/')
   await expect(page.getByRole('heading', { name: 'Market Jury', level: 1 })).toBeVisible()
   await expect(page.getByText('TRADE MASTER')).toBeVisible()
-  await expect(page.getByTestId('dateline')).toContainText('SAST')
+  await expect(page.getByTestId('dateline')).toContainText(/NY \d\d:\d\d/)
   await expect(page.getByText('Virtual money only. Not financial advice.')).toBeVisible()
 
   // The session survives a reload: it lives in an httpOnly cookie.

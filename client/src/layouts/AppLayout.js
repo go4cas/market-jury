@@ -8,7 +8,7 @@ import { TradeMasterNotice } from '../components/TradeMasterNotice.js'
 
 const navItem = 'inline-flex min-h-11 shrink-0 items-center rounded-control px-3 font-mono text-sm text-fg-soft hover:bg-surface-inset hover:text-fg [&[aria-current=page]]:bg-brand-tint [&[aria-current=page]]:text-brand'
 
-const PUBLIC = [['/', 'Overview'], ['/standings', 'Standings'], ['/yesterday', 'Yesterday'], ['/history', 'History'], ['/columnist', 'Columnist'], ['/compare', 'Compare']]
+const PUBLIC = [['/', 'Overview'], ['/standings', 'Standings'], ['/yesterday', 'Yesterday'], ['/history', 'History'], ['/columnist', 'Columnist'], ['/compare', 'Compare'], ['/cast', 'The cast']]
 const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs'], ['/admin/briefing', 'Briefing pack']]
 
 // The compact top bar every screen shares: logo mark, name, navigation, the
@@ -30,14 +30,14 @@ export function AppLayout(content) {
             <span class="font-display text-lg font-bold text-fg">Market Jury</span>
           </a>
 
-          <div class="ml-auto flex items-center gap-2 sm:order-last">
+          <div class="ml-auto flex items-center gap-2">
             ${() => sessionState.tradeMaster
               ? html`<span class="whitespace-nowrap rounded-full border border-brand px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-brand">TRADE MASTER</span>`
               : ''}
             ${ThemeToggle()}
           </div>
 
-          <nav class="-mx-4 flex w-full items-center gap-1 overflow-x-auto px-4 sm:mx-0 sm:w-auto sm:flex-1 sm:px-0" aria-label="Main">
+          <nav class="-mx-4 flex w-full items-center gap-1 overflow-x-auto px-4" aria-label="Main">
             ${PUBLIC.map(([to, label]) => Link({ to, children: label, class: navItem }))}
             ${() => sessionState.tradeMaster ? html`<span class="mx-1 h-6 shrink-0 border-l border-line" aria-hidden="true"></span>${TRADE_MASTER.map(([to, label]) => Link({ to, children: label, class: navItem }))}
               <button type="button" class="inline-flex min-h-11 shrink-0 items-center rounded-control px-3 font-mono text-sm text-brand underline underline-offset-4" @click="${signOut}">Sign out</button>` : ''}

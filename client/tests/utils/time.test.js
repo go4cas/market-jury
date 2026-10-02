@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { formatClock, formatDateline, NY_TIME_ZONE, SA_TIME_ZONE } from '../../src/utils/time.js'
+import { formatClock, formatDateline, NY_TIME_ZONE, SA_TIME_ZONE, viewerTimeZone, zoneLabel } from '../../src/utils/time.js'
 
 describe('time formatting', () => {
   // 14 Oct 2026 13:41 UTC: New York is on summer time (UTC-4), South Africa is UTC+2.
@@ -25,5 +25,17 @@ describe('time formatting', () => {
     const lateNight = new Date('2026-10-14T23:30:00Z')
     expect(formatDateline(lateNight, SA_TIME_ZONE)).toBe('Thu 15 Oct 2026')
     expect(formatDateline(lateNight, NY_TIME_ZONE)).toBe('Wed 14 Oct 2026')
+  })
+
+  it('names a time zone the way its readers know it', () => {
+    expect(zoneLabel(summer, SA_TIME_ZONE)).toBe('SAST')
+    expect(zoneLabel(summer, 'Australia/Sydney')).toBe('AEDT')
+    expect(zoneLabel(winter, 'Europe/London')).toBe('GMT')
+    // Zones without a common abbreviation fall back to the offset.
+    expect(zoneLabel(summer, 'Asia/Tashkent')).toBe('GMT+5')
+  })
+
+  it('reads the viewer\'s own time zone from the browser', () => {
+    expect(viewerTimeZone()).toBe(Intl.DateTimeFormat().resolvedOptions().timeZone)
   })
 })
