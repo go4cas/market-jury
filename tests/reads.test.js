@@ -1,6 +1,7 @@
 import { afterEach, beforeAll, describe, expect, test } from 'bun:test'
 import { createHash } from 'node:crypto'
 import { startServer } from '../server/app.js'
+import { marketStatus } from '../server/reads.js'
 import { testClientDir, testDb } from './helpers.js'
 import { runSampleWeek, sampleSteps } from './sample-week.js'
 import traderAnswer from './recorded/trader-answer.json'
@@ -44,11 +45,32 @@ describe('Gallery reads', () => {
 
   test('the Overview: status, movers, standings and the latest recap', async () => {
     const { body } = await get('/api/overview')
-    expect(body.status).toMatchObject({ state: 'running', startDate: '2026-11-23', latestDate: '2026-11-27', day: 3, market: 'closed' })
+    expect(body.status).toMatchObject({ state: 'running', startDate: '2026-11-23', latestDate: '2026-11-27', day: 3, market: 'closed', changesAt: '2026-11-30T14:30:00.000Z' })
     expect(body.movers.map((/** @type {any} */ m) => m.ticker)).toContain('SPY')
     expect(body.standings.daily.map((/** @type {any} */ r) => r.name).sort()).toEqual(['Claude daily', 'DeepSeek daily', 'GPT daily', 'Gemini daily', 'The Index'])
     expect(body.standings.weekly).toHaveLength(5)
     expect(body.recap).toMatchObject({ kind: 'daily', date: '2026-11-27', headline: columnistDaily.headline })
+  })
+
+  test('the Overview carries what the landing hero shows', async () => {
+    const { body } = await get('/api/overview')
+    expect(body.hero).toMatchObject({ traders: 8, startingCashMicro: 1_000_000_000, totalDays: 63 })
+    expect(body.hero.trades).toBe(db.query('SELECT COUNT(*) AS n FROM fills').get().n)
+    // The jury box: every daily Trader still trading, then The Index.
+    expect(body.hero.daily.map((/** @type {any} */ t) => t.name)).toEqual(['Claude daily', 'GPT daily', 'Gemini daily', 'DeepSeek daily', 'The Index'])
+    expect(body.hero.daily[0]).toMatchObject({ kind: 'ai', colourSlot: 1 })
+    expect(body.hero.daily[0].totalMicro).toBeGreaterThan(0)
+  })
+
+  test('the market status: open, opening soon, closed, and holidays', () => {
+    // Friday 27 November 2026 is a half day: 09:30 to 13:00 in New York (14:30 to 18:00 UTC).
+    expect(marketStatus(db, new Date('2026-11-27T14:00:00Z'))).toEqual({ market: 'soon', changesAt: '2026-11-27T14:30:00.000Z' })
+    expect(marketStatus(db, new Date('2026-11-27T15:00:00Z'))).toEqual({ market: 'open', changesAt: '2026-11-27T18:00:00.000Z' })
+    expect(marketStatus(db, new Date('2026-11-27T20:00:00Z'))).toEqual({ market: 'closed', changesAt: '2026-11-30T14:30:00.000Z' })
+    // Thanksgiving: a weekday with no trading.
+    expect(marketStatus(db, new Date('2026-11-26T15:00:00Z'))).toEqual({ market: 'holiday', changesAt: '2026-11-27T14:30:00.000Z' })
+    // Early on a trading day, more than an hour before the open.
+    expect(marketStatus(db, new Date('2026-11-24T12:00:00Z'))).toEqual({ market: 'closed', changesAt: '2026-11-24T14:30:00.000Z' })
   })
 
   test('the value chart: every close, one line per Trader on the track and The Index', async () => {

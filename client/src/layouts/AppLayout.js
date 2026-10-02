@@ -8,7 +8,7 @@ import { TradeMasterNotice } from '../components/TradeMasterNotice.js'
 
 const navItem = 'inline-flex min-h-11 shrink-0 items-center rounded-control px-3 font-mono text-sm text-fg-soft hover:bg-surface-inset hover:text-fg [&[aria-current=page]]:bg-brand-tint [&[aria-current=page]]:text-brand'
 
-const PUBLIC = [['/', 'Overview'], ['/standings', 'Standings'], ['/yesterday', 'Yesterday'], ['/history', 'History'], ['/columnist', 'Columnist'], ['/compare', 'Compare'], ['/cast', 'The cast']]
+const PUBLIC = [['/', 'Overview'], ['/standings', 'Standings'], ['/yesterday', 'Yesterday'], ['/history', 'History'], ['/columnist', 'Columnist'], ['/cast', 'Cast'], ['/compare', 'Compare']]
 const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs'], ['/admin/briefing', 'Briefing pack']]
 
 // The compact top bar every screen shares: logo mark, name, navigation, the

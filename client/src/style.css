@@ -67,6 +67,9 @@
   --color-bad: #CF222E;        /* losses: always with ▼ and − */
   --color-warn: #9A6700;       /* banner border and icon */
   --color-warn-wash: #FFF4D6;  /* banner ground */
+  --color-good-wash: #DAFBE1;  /* Market open pill ground */
+  --color-bad-wash: #FFEBE9;   /* destructive confirmation line */
+  --color-scrim: rgb(31 35 40 / 0.48); /* dialog ::backdrop */
   --color-on-brand: #FFFFFF;   /* text on bg-brand */
   --color-highlighter: rgba(53, 106, 153, 0.16); /* glossary-term wash, with a dotted brand underline */
   --color-chart-grid: #E4E8EC;
@@ -125,6 +128,9 @@
   --color-bad: #F87171;
   --color-warn: #F5A524;
   --color-warn-wash: #2A1F0A;
+  --color-good-wash: #0F2A1A;
+  --color-bad-wash: #2D1316;
+  --color-scrim: rgb(1 4 9 / 0.72);
   --color-highlighter: rgba(123, 167, 215, 0.22);
   --color-chart-grid: #1C2430;
 }
@@ -175,3 +181,8 @@ button, a, input {
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
 }
+
+/* ── Market Jury components that utilities can't express ── */
+
+/* MarketStatus "opens soon": a half-filled dot. */
+.mj-dot-half { background: linear-gradient(90deg, currentColor 50%, transparent 50%); }

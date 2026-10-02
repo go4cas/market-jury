@@ -33,6 +33,7 @@ export function readRoutes({ db, now }) {
           movers: latest ? movers(db, latest) : [],
           standings: latest ? { daily: standings(db, { track: 'daily', kind: 'all', end: latest }), weekly: standings(db, { track: 'weekly', kind: 'all', end: latest }) } : { daily: [], weekly: [] },
           recap: db.query("SELECT kind, period_date AS date, headline, body FROM columnist_posts WHERE kind = 'daily' ORDER BY period_date DESC LIMIT 1").get() ?? null,
+          hero: hero(db, latest),
         }
       }),
     },
@@ -140,8 +141,6 @@ function dayNumber(db, date) {
 function status(db, at) {
   const s = /** @type {{ experiment_state: string, start_date: string | null }} */ (db.query('SELECT experiment_state, start_date FROM settings WHERE id = 1').get())
   const today = marketDate(at)
-  const open = openInstant(db, today)
-  const close = closeInstant(db, today)
   const latest = latestDate(db)
   return {
     state: s.experiment_state,
@@ -149,7 +148,57 @@ function status(db, at) {
     today,
     latestDate: latest,
     day: dayNumber(db, latest ?? today),
-    market: open && close && at >= open && at < close ? 'open' : 'closed',
+    ...marketStatus(db, at),
+  }
+}
+
+/** How long before the open the market counts as "opening soon". */
+const SOON_MS = 60 * 60_000
+
+/**
+ * The New York market at an instant: open (until the close), opening soon (the
+ * hour before the open), closed, or a holiday (a weekday with no trading), with
+ * the moment that changes. changesAt is null past the end of the stored calendar.
+ * @param {Database} db
+ * @param {Date} at
+ * @returns {{ market: 'open' | 'soon' | 'closed' | 'holiday', changesAt: string | null }}
+ */
+export function marketStatus(db, at) {
+  const today = marketDate(at)
+  const open = openInstant(db, today)
+  const close = closeInstant(db, today)
+  if (open && close && at >= open && at < close) return { market: 'open', changesAt: close.toISOString() }
+  if (open && at < open) return { market: open.getTime() - at.getTime() <= SOON_MS ? 'soon' : 'closed', changesAt: open.toISOString() }
+  const next = nextTradingDay(db, today)
+  const weekday = new Date(`${today}T12:00:00Z`).getUTCDay()
+  return { market: !open && weekday >= 1 && weekday <= 5 ? 'holiday' : 'closed', changesAt: next ? openInstant(db, next)?.toISOString() ?? null : null }
+}
+
+/** The paper phase runs three months: about 63 trading days. */
+const TOTAL_DAYS = 63
+
+/**
+ * What the landing hero shows: the line-up size, the starting cash, trades so
+ * far, and each daily Trader's latest value (The Index last) for the jury box.
+ * @param {Database} db
+ * @param {string | null} latest
+ */
+function hero(db, latest) {
+  const { starting_cash_micro: startingCashMicro } = /** @type {{ starting_cash_micro: number }} */ (db.query('SELECT starting_cash_micro FROM settings WHERE id = 1').get())
+  const valueOn = db.prepare('SELECT total_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?')
+  const daily = /** @type {Array<{ id: number, name: string, kind: string, colourSlot: number | null }>} */ (
+    db.query(`SELECT id, name, kind, colour_slot AS colourSlot FROM traders
+              WHERE status <> 'retired' AND (kind = 'benchmark' OR cadence = 'daily') ORDER BY kind = 'benchmark', id`).all()
+  )
+  return {
+    traders: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM traders WHERE kind = 'ai' AND status <> 'retired'").get()).n,
+    startingCashMicro,
+    totalDays: TOTAL_DAYS,
+    trades: /** @type {{ n: number }} */ (db.query('SELECT COUNT(*) AS n FROM fills').get()).n,
+    daily: daily.map((t) => ({
+      ...t,
+      totalMicro: (latest ? /** @type {{ total_micro: number } | null} */ (valueOn.get(t.id, latest))?.total_micro : null) ?? startingCashMicro,
+    })),
   }
 }
 

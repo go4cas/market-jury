@@ -3,7 +3,7 @@ import uPlot from 'uplot'
 import 'uplot/dist/uPlot.min.css'
 import { uiState } from '../state/uiState.js'
 import { day, usd } from '../utils/format.js'
-import { displayName } from '../utils/traders.js'
+import { colourOf, displayName } from '../utils/traders.js'
 import { Swatch } from './TraderMark.js'
 
 let nextId = 0
@@ -54,7 +54,7 @@ export function ValueChart({ dates, lines, label, height = 220 }) {
         {},
         ...lines.map((l) => ({
           label: l.name,
-          stroke: l.kind === 'benchmark' ? token('--color-index') : token(`--color-trader-${l.colourSlot ?? 5}`),
+          stroke: l.kind === 'benchmark' ? token('--color-index') : token(colourOf(l).slice(4, -1)),
           width: l.kind === 'benchmark' ? 2 : l.dotted ? 2 : 2.5,
           dash: l.kind === 'benchmark' ? [6, 5] : l.dotted ? [2, 4] : undefined,
           points: { show: dates.length === 1 },
