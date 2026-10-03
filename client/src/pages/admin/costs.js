@@ -18,7 +18,8 @@ const dollars = (n) => `$${n.toFixed(2)}`
 /** "October" from "2026-10" (the budget runs by calendar month, UTC). @param {string} month */
 const monthName = (month) => new Date(`${month}-01T00:00:00Z`).toLocaleString('en-GB', { month: 'long', timeZone: 'UTC' })
 
-// Costs: are we inside the budget?
+// Costs: are we inside the budget? The meter (design system BudgetMeter): solid bar =
+// spent so far, hatched extension = projected for the month, full track = the budget.
 function CostsPage() {
   useMeta({ title: 'Costs · Market Jury' })
   const costs = useFetch('/api/admin/costs')
@@ -27,23 +28,26 @@ function CostsPage() {
       ${PageHeader({ eyebrow: 'Trade Master only', title: 'Costs', intro: 'What the AI models have cost this month, and where the month is heading at this pace. Dry runs count too.' })}
       ${Loadable(costs, (c) => {
         const b = c.budget
-        const used = b.ceilingUsd ? Math.min(100, (b.projectedUsd / b.ceilingUsd) * 100) : 0
+        /** Share of the monthly budget, 0 to 100. @param {number} usd */
+        const pct = (usd) => (b.ceilingUsd ? Math.min(100, (usd / b.ceilingUsd) * 100) : 0).toFixed(1)
+        const month = monthName(b.month)
+        const short = month.slice(0, 3)
+        const caption = `${month}: ${dollars(b.spentUsd)} spent, ${dollars(b.projectedUsd)} projected of ${dollars(b.ceilingUsd)} (${Math.round(b.ceilingUsd ? (b.projectedUsd / b.ceilingUsd) * 100 : 0)}%)`
         return html`
           ${b.level !== 'ok' ? Banner(b.level === 'over'
             ? 'The projected spend has reached the budget ceiling. The weekly Traders and the daily recap are paused; the daily Traders and the weekly report keep running.'
             : 'The projected spend is over 90% of the budget. At 100% the weekly Traders and the daily recap pause.') : ''}
           <dl class="grid grid-cols-3 gap-3">
-            <div class="rounded-panel border border-line bg-surface-raised p-3"><dt class="prompt">Spent in ${monthName(b.month)}</dt><dd class="font-mono text-lg text-fg">${dollars(b.spentUsd)}</dd></div>
-            <div class="rounded-panel border border-line bg-surface-raised p-3"><dt class="prompt">Projected for ${monthName(b.month)}</dt><dd class="font-mono text-lg text-fg">${dollars(b.projectedUsd)}</dd></div>
-            <div class="rounded-panel border border-line bg-surface-raised p-3"><dt class="prompt">Budget per month</dt><dd class="font-mono text-lg text-fg">${dollars(b.ceilingUsd)}</dd></div>
+            ${[[`Spent so far in ${month}`, b.spentUsd, `since 1 ${short}`], [`Projected for all of ${month}`, b.projectedUsd, "at today's pace"], ['Monthly budget', b.ceilingUsd, 'set in Settings']].map(([label, value, hint]) => html`<div class="rounded-panel border border-line bg-surface-raised p-3"><dt class="prompt">${label}</dt><dd class="font-mono text-lg text-fg">${dollars(Number(value))}</dd><dd class="text-xs text-fg-soft">${hint}</dd></div>`)}
           </dl>
-          <div class="flex flex-col gap-1.5">
-            <svg viewBox="0 0 100 6" preserveAspectRatio="none" class="h-3 w-full" aria-hidden="true">
-              <rect x="0" y="0" width="100" height="6" fill="var(--color-surface-inset)"></rect>
-              <rect x="0" y="0" width="${used.toFixed(1)}" height="6" fill="${b.level === 'ok' ? 'var(--color-brand)' : 'var(--color-warn)'}"></rect>
-              <rect x="89.8" y="0" width="0.4" height="6" fill="var(--color-fg-soft)"></rect>
-            </svg>
-            <p class="text-sm text-fg-soft" data-testid="budget-bar-caption">The bar is the projected spend: ${Math.round(used)}% of the monthly budget. The tick at 90% is where the warning starts. The projection is this month's spend so far, stretched over the whole month at the same daily pace, so early in a month it swings a lot.</p>
+          <div class="${`mj-meter${b.level === 'ok' ? '' : ' mj-meter--warn'}`}" role="img" aria-label="${caption}">
+            <p class="font-mono text-sm text-fg" aria-hidden="true">${caption}</p>
+            <div class="mj-meter__track" aria-hidden="true">
+              <div class="mj-meter__projected" style="${`width: ${pct(b.projectedUsd)}%`}"></div>
+              <div class="mj-meter__spent" style="${`width: ${pct(b.spentUsd)}%`}"></div>
+              <div class="mj-meter__tick"></div>
+            </div>
+            <p class="mj-meter__scale" aria-hidden="true"><span>$0</span><span>Warning at 90%</span><span>${dollars(b.ceilingUsd)}</span></p>
           </div>
           <section class="flex flex-col gap-2"><h2 class="font-display text-2xl font-semibold text-fg">By provider</h2>
             ${c.byProvider.length ? html`<table class="w-full border-collapse"><tbody>${c.byProvider.map((/** @type {any} */ p) => html`<tr><th scope="row" class="border-t border-line px-2 py-2.5 text-left text-sm font-normal text-fg">${PROVIDERS[p.provider] ?? p.provider}</th><td class="${td}">${usd(p.cost_micro)}</td></tr>`)}</tbody></table>` : html`<p class="text-fg-soft">No model calls this month yet.</p>`}

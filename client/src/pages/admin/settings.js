@@ -331,10 +331,10 @@ function LineUp(list, act, nextOpen, added) {
     })
     if (ok) act('POST', `/api/admin/traders/${t.id}/retire`, {}, `${name} will be retired.`)
   }
-  return html`<ul class="flex flex-col">${list.map((t) => html`<li class="flex items-center justify-between gap-3 border-t border-line py-2 first:border-t-0">
-      <span class="flex min-w-0 flex-1 flex-col">${TraderName({ name: t.name, kind: t.kind, colourSlot: t.colour_slot })}
-        <span class="break-words font-mono text-xs text-fg-soft">${t.kind === 'benchmark' ? 'Holds SPY' : `${t.provider} · ${t.model_version} · ${t.effort}`}${t.status !== 'active' ? ` · ${t.status}` : ''}</span></span>
-      ${t.kind === 'ai' && t.status === 'active' ? html`<button type="button" class="${`${btnSecondary} shrink-0`}" @click="${() => retire(t)}">Retire</button>` : ''}
+  return html`<ul class="flex flex-col">${list.map((t) => html`<li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-line py-2 first:border-t-0">
+      <span class="flex min-w-0 flex-col">${TraderName({ name: t.name, kind: t.kind, colourSlot: t.colour_slot })}
+        <span class="font-mono text-xs text-fg-soft [overflow-wrap:anywhere]">${t.kind === 'benchmark' ? 'Holds SPY' : `${t.provider} · ${t.model_version} · ${t.effort}`}${t.status !== 'active' ? ` · ${t.status}` : ''}</span></span>
+      ${t.kind === 'ai' && t.status === 'active' ? html`<button type="button" class="${`${btnSecondary} whitespace-nowrap`}" @click="${() => retire(t)}">Retire</button>` : ''}
     </li>`.key(t.id))}</ul>
     <div><button type="button" class="${btnSecondary}" @click="${() => addTrader(added)}">Add a Trader</button></div>`
 }
