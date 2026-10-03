@@ -48,8 +48,9 @@ describe('routeGuard', () => {
     expect(routeGuard('/standings', visitor)).toBe('/login')
   })
 
-  it('lets anyone see the login page', () => {
+  it('lets anyone see the login page and the note on where data goes', () => {
     expect(routeGuard('/login', visitor)).toBeUndefined()
+    expect(routeGuard('/about', visitor)).toBeUndefined()
   })
 
   it('lets visitors read public screens once the Gallery is open', () => {
