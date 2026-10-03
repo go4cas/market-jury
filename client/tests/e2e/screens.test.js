@@ -339,14 +339,51 @@ test('on a phone: Retire stays beside each Trader, cast names sit beside their i
   }
 
   await page.goto('/admin/briefing')
-  await expect(page.getByText('Biggest rises')).toBeVisible()
-  await expect(page.getByText('Biggest falls')).toBeVisible()
+  await expect(page.getByText('Rose most')).toBeVisible()
+  await expect(page.getByText('Fell most')).toBeVisible()
   const prices = page.getByRole('region', { name: 'Prices for every ticker' })
+  // A phone shows Ticker, Close and Day only.
+  await expect(prices.getByRole('columnheader')).toHaveText(['Ticker', 'Close', 'Day'])
   await expect(prices.locator('tbody tr').first()).toBeVisible()
   expect(await prices.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
 
   await page.goto('/admin/costs')
-  await expect(page.getByText('Budget per month')).toBeVisible()
-  await expect(page.getByTestId('budget-bar-caption')).toContainText('The tick at 90% is where the warning starts')
+  await expect(page.getByText('Monthly budget')).toBeVisible()
+  await expect(page.getByRole('img', { name: /^\w+: \$\d+\.\d\d spent, \$\d+\.\d\d projected of \$25\.00 \(\d+%\)$/ })).toBeVisible()
+  await expect(page.getByText('Warning at 90%')).toBeVisible()
+})
+
+test('on a phone the navigation sits behind a Menu button, never scrolling sideways', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/')
+  const menu = page.getByRole('button', { name: 'Open menu' })
+  await expect(menu).toHaveAttribute('aria-expanded', 'false')
+  await menu.click()
+  const panel = page.locator('#main-menu')
+  await expect(panel).toBeVisible()
+  await expect(page.getByRole('button', { name: 'Close menu' })).toHaveAttribute('aria-expanded', 'true')
+  for (const name of ['Overview', 'Standings', 'Yesterday', 'History', 'Columnist', 'Cast', 'Compare', 'Settings', 'Costs', 'Briefing pack']) {
+    await expect(panel.getByRole('link', { name, exact: true })).toBeVisible()
+  }
+  await expect(panel.getByText('Trade Master', { exact: true })).toBeVisible()
+  await expect(panel.getByRole('button', { name: 'Sign out' })).toBeVisible()
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  // Picking a page closes the menu and puts focus on the new page's heading.
+  await panel.getByRole('link', { name: 'Cast', exact: true }).click()
+  await expect(page).toHaveURL('/cast')
+  await expect(panel).toBeHidden()
+  await expect(page.getByRole('heading', { level: 1 })).toBeFocused()
+
+  // Esc closes it too.
+  await page.getByRole('button', { name: 'Open menu' }).click()
+  await expect(panel).toBeVisible()
+  await page.keyboard.press('Escape')
+  await expect(panel).toBeHidden()
+
+  // Laptops keep the inline row and no Menu button.
+  await page.setViewportSize({ width: 1280, height: 800 })
+  await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden()
+  await expect(page.locator('header nav').getByRole('link', { name: 'Standings' })).toBeVisible()
 })

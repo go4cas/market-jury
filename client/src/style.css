@@ -251,3 +251,27 @@ button, a, input {
 
 /* The experiment control bar at the top of Settings: actions, set apart from the fields below. */
 .mj-control { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; padding: 20px; border: 1px solid var(--color-brand); border-radius: var(--radius-panel); background: var(--color-brand-tint); }
+
+/* Main menu under 1024px (design system MainNav): a full-width popover panel just
+   under the header, with its own scroll. --mj-header-h is set when it opens. */
+.mj-menu[popover] {
+  position: fixed; inset: var(--mj-header-h, 61px) 0 auto 0; margin: 0; width: 100%; max-width: none;
+  max-height: calc(100dvh - var(--mj-header-h, 61px)); overflow-y: auto;
+  padding: 8px 16px 16px; border: 0; border-bottom: 1px solid var(--color-line);
+  background: var(--color-surface-raised); color: var(--color-fg); box-shadow: 0 12px 24px rgb(0 0 0 / 0.25);
+}
+.mj-menu:popover-open { display: flex; flex-direction: column; }
+.mj-menu__label {
+  margin: 12px 12px 4px; padding-top: 12px; border-top: 1px solid var(--color-line);
+  font: 500 12px/16px var(--font-mono); letter-spacing: 0.04em; text-transform: uppercase; color: var(--color-fg-soft);
+}
+
+/* Budget meter on Costs (design system BudgetMeter). */
+.mj-meter { display: flex; flex-direction: column; gap: 6px; }
+.mj-meter__track { position: relative; height: 12px; border-radius: 999px; background: var(--color-surface-inset); border: 1px solid var(--color-line); overflow: hidden; }
+.mj-meter__spent { position: absolute; inset: 0 auto 0 0; background: var(--color-brand); }
+.mj-meter__projected { position: absolute; inset: 0 auto 0 0; background: repeating-linear-gradient(135deg, var(--color-brand-tint) 0 4px, transparent 4px 8px); border-right: 2px solid var(--color-brand); }
+.mj-meter--warn .mj-meter__spent { background: var(--color-warn); }
+.mj-meter--warn .mj-meter__projected { border-right-color: var(--color-warn); }
+.mj-meter__tick { position: absolute; top: -2px; bottom: -2px; left: 90%; width: 2px; background: var(--color-fg-soft); }
+.mj-meter__scale { display: flex; justify-content: space-between; font: 400 12px/16px var(--font-mono); color: var(--color-fg-soft); }

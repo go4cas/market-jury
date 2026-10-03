@@ -3,6 +3,7 @@ import { go } from '../framework/router.js'
 import { sessionState } from '../state/sessionState.js'
 import { ThemeToggle } from '../components/ThemeToggle.js'
 import { GitHubLink } from '../components/GitHubLink.js'
+import { MenuButton, MenuPanel } from '../components/MainMenu.js'
 import { ToastContainer } from '../components/ToastContainer.js'
 import { Link } from '../components/Link.js'
 import { TradeMasterNotice } from '../components/TradeMasterNotice.js'
@@ -14,7 +15,8 @@ const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs']
 
 // The compact top bar every screen shares: logo mark, name, navigation, the
 // Trade Master pill when Cas is logged in, a link to the code on GitHub, the look
-// switch, and the paper-trading notice.
+// switch, and the paper-trading notice. Under 1024px the nav row hides behind a
+// Menu button (components/MainMenu.js); above it the row wraps, never scrolls.
 /** @param {any} content */
 export function AppLayout(content) {
   const signOut = async () => {
@@ -37,15 +39,17 @@ export function AppLayout(content) {
               : ''}
             ${GitHubLink()}
             ${ThemeToggle()}
+            ${MenuButton()}
           </div>
 
-          <nav class="-mx-4 flex w-full items-center gap-1 overflow-x-auto px-4" aria-label="Main">
+          <nav class="hidden w-full flex-wrap items-center gap-1 lg:flex" aria-label="Main">
             ${PUBLIC.map(([to, label]) => Link({ to, children: label, class: navItem }))}
             ${() => sessionState.tradeMaster ? html`<span class="mx-1 h-6 shrink-0 border-l border-line" aria-hidden="true"></span>${TRADE_MASTER.map(([to, label]) => Link({ to, children: label, class: navItem }))}
               <button type="button" class="inline-flex min-h-11 shrink-0 items-center rounded-control px-3 font-mono text-sm text-brand underline underline-offset-4" @click="${signOut}">Sign out</button>` : ''}
           </nav>
         </div>
       </header>
+      ${MenuPanel({ links: PUBLIC, tradeMasterLinks: () => sessionState.tradeMaster ? TRADE_MASTER : null, signOut })}
 
       <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6">${TradeMasterNotice()}${content}</main>
 
