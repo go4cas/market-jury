@@ -51,11 +51,11 @@ export function startServer({ db, port, clientDir, now, steps }) {
       const path = join(root, decodeURIComponent(pathname))
       if (path.startsWith(root + sep)) {
         const file = Bun.file(path)
-        if (await file.exists()) return withSecurityHeaders(new Response(file))
+        if (await file.exists()) return withSecurityHeaders(new Response(file, { headers: { 'Cache-Control': cacheFor(pathname) } }))
       }
       const index = Bun.file(join(root, 'index.html'))
       if (!(await index.exists())) return error(503, 'The client is not built yet. Run `bun run build`.')
-      return withSecurityHeaders(new Response(index, { headers: { 'Content-Type': 'text/html;charset=utf-8' } }))
+      return withSecurityHeaders(new Response(index, { headers: { 'Content-Type': 'text/html;charset=utf-8', 'Cache-Control': 'no-cache' } }))
     },
 
     error(err) {
@@ -63,4 +63,15 @@ export function startServer({ db, port, clientDir, now, steps }) {
       return error(500, 'Something went wrong on the server.')
     },
   })
+}
+
+/**
+ * How long a browser may keep a built file. Vite names everything under
+ * /assets/ after its contents, so those never change and can be kept for a
+ * year; the rest (index.html, mode.js, logos) keep their names across releases,
+ * so the browser checks back each time.
+ * @param {string} pathname
+ */
+export function cacheFor(pathname) {
+  return pathname.startsWith('/assets/') ? 'public, max-age=31536000, immutable' : 'no-cache'
 }

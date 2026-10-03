@@ -1,8 +1,10 @@
 import { describe, expect, test } from 'bun:test'
+import { writeFileSync } from 'node:fs'
+import { join } from 'node:path'
 import { testServer } from './helpers.js'
 
 describe('server', () => {
-  const { request } = testServer()
+  const { request, clientDir } = testServer()
 
   test('answers the health check', async () => {
     const res = await request('/api/health')
@@ -28,6 +30,13 @@ describe('server', () => {
       expect(res.status).toBe(200)
       expect(await res.text()).toContain('<title>Market Jury</title>')
     }
+  })
+
+  test('keeps fingerprinted assets for a year, and checks back for everything else', async () => {
+    writeFileSync(join(clientDir, 'assets', 'app-abc123.js'), 'export {}')
+    expect((await request('/assets/app-abc123.js')).headers.get('cache-control')).toBe('public, max-age=31536000, immutable')
+    expect((await request('/favicon.svg')).headers.get('cache-control')).toBe('no-cache')
+    expect((await request('/standings')).headers.get('cache-control')).toBe('no-cache')
   })
 
   test('never serves files outside the client folder', async () => {

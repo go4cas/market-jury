@@ -26,8 +26,9 @@ export function testClientDir() {
  */
 export function testServer(options = {}) {
   const db = testDb()
-  const server = startServer({ db, port: 0, clientDir: testClientDir(), ...options })
+  const clientDir = testClientDir()
+  const server = startServer({ db, port: 0, clientDir, ...options })
   /** @param {string} path @param {RequestInit} [init] */
   const request = (path, init) => fetch(new URL(path, server.url), init)
-  return { db, server, request }
+  return { db, server, request, clientDir }
 }

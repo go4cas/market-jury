@@ -1,0 +1,5 @@
+# Market Jury: the public Gallery may be indexed; the Trade Master's screens
+# and the JSON API may not.
+User-agent: *
+Disallow: /admin
+Disallow: /api/
