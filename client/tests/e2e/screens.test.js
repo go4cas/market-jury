@@ -387,3 +387,24 @@ test('on a phone the navigation sits behind a Menu button, never scrolling sidew
   await expect(page.getByRole('button', { name: 'Open menu' })).toBeHidden()
   await expect(page.locator('header nav').getByRole('link', { name: 'Standings' })).toBeVisible()
 })
+
+test('the header stays at the top while the page scrolls, on a laptop and a phone', async ({ page }) => {
+  for (const size of [{ width: 1280, height: 600 }, { width: 390, height: 600 }]) {
+    await page.setViewportSize(size)
+    await page.goto('/cast')
+    await expect(page.getByRole('heading', { name: 'Around the experiment' })).toBeVisible()
+    await expect.poll(() => page.evaluate(() => { window.scrollTo(0, document.body.scrollHeight); return window.scrollY })).toBeGreaterThan(100)
+    expect((await page.locator('[data-app-header]').boundingBox())?.y).toBe(0)
+  }
+  // A phone keeps it to one compact row, even for the logged-in Trade Master.
+  expect((await page.locator('[data-app-header]').boundingBox())?.height).toBeLessThanOrEqual(64)
+  // A jump to a cast card lands below the header, not under it.
+  await page.goto('/cast#opening-bell')
+  const header = await page.locator('[data-app-header]').boundingBox()
+  const card = await page.locator('#opening-bell').boundingBox()
+  expect(card && header && card.y >= header.height).toBe(true)
+  // On a phone the menu still drops from the header's bottom edge.
+  await page.getByRole('button', { name: 'Open menu' }).click()
+  const menu = await page.locator('#main-menu').boundingBox()
+  expect(menu && header && Math.abs(menu.y - header.height) <= 1).toBe(true)
+})

@@ -252,6 +252,9 @@ button, a, input {
 /* The experiment control bar at the top of Settings: actions, set apart from the fields below. */
 .mj-control { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 16px 24px; padding: 20px; border: 1px solid var(--color-brand); border-radius: var(--radius-panel); background: var(--color-brand-tint); }
 
+/* The sticky header's height (set by components/MainMenu.js) keeps anchor jumps clear of it. */
+html { scroll-padding-top: calc(var(--mj-header-h, 61px) + 8px); }
+
 /* Main menu under 1024px (design system MainNav): a full-width popover panel just
    under the header, with its own scroll. --mj-header-h is set when it opens. */
 .mj-menu[popover] {
