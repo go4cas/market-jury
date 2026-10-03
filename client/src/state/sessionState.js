@@ -42,8 +42,8 @@ export const sessionState = reactive({
 })
 
 /**
- * Where a visitor may go. Trade Master screens live under /admin; every other
- * screen is public only while the Gallery is open. Returns the path to send
+ * Where a visitor may go. Trade Master screens live under /admin; /about is
+ * always public; every other screen is public only while the Gallery is open. Returns the path to send
  * the visitor to instead, or undefined to let them through.
  * @param {string} to
  * @param {Session} session
@@ -52,6 +52,8 @@ export const sessionState = reactive({
 export function routeGuard(to, { tradeMaster, galleryEnabled }) {
   if (to === '/login') return tradeMaster ? '/' : undefined
   if (tradeMaster) return undefined
+  // The note on where data goes is static and readable before anyone signs in.
+  if (to === '/about') return undefined
   if (to === '/admin' || to.startsWith('/admin/')) return '/login'
   return galleryEnabled ? undefined : '/login'
 }

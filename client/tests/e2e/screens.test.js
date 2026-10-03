@@ -445,3 +445,13 @@ test('every footer links to a short note on where data goes', async ({ page }) =
   await expect(page.getByText('There are no ads, no analytics and no tracking.')).toBeVisible()
   await expect(page.getByText('each copy is deleted after 30 days', { exact: false })).toBeVisible()
 })
+
+test('signed out with the Gallery closed, the login page still links to the note on where data goes', async ({ browser, baseURL }) => {
+  const visitor = await browser.newPage({ baseURL })
+  await visitor.goto('/')
+  await expect(visitor).toHaveURL('/login')
+  await visitor.getByRole('link', { name: 'About this site' }).click()
+  await expect(visitor).toHaveURL('/about')
+  await expect(visitor.getByRole('heading', { name: 'Where data goes', level: 1 })).toBeVisible()
+  await visitor.close()
+})
