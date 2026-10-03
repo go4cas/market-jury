@@ -37,7 +37,7 @@ test('the Trade Master signs in, sees the Overview, and signs out', async ({ pag
   await page.getByRole('button', { name: 'Sign in' }).click()
 
   await expect(page).toHaveURL('/')
-  await expect(page.getByRole('heading', { name: '4 AI traders. $1,000 each. 3 months.', level: 1 })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Rival AIs. Same money, same news. Different trades.', level: 1 })).toBeVisible()
   await expect(page.getByText('TRADE MASTER', { exact: true })).toBeVisible()
   await expect(page.getByTestId('dateline')).toContainText(/NY \d\d:\d\d/)
   await expect(page.getByText('Virtual money only. Not financial advice.')).toBeVisible()

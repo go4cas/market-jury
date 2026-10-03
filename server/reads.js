@@ -130,6 +130,19 @@ const dateParam = (s) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null)
 export const latestDate = (db) => /** @type {{ d: string | null }} */ (db.query('SELECT MAX(trading_date) AS d FROM snapshots').get()).d
 
 /**
+ * How many trading days the experiment is set to run: up to its end date once it
+ * has started (null when it runs on with no end, after a resume past the end),
+ * or the planned paper phase before the start.
+ * @param {Database} db
+ * @returns {number | null}
+ */
+export function plannedDays(db) {
+  const s = /** @type {{ start_date: string | null, end_date: string | null }} */ (db.query('SELECT start_date, end_date FROM settings WHERE id = 1').get())
+  if (!s.start_date) return PAPER_PHASE_DAYS
+  return s.end_date ? dayNumber(db, s.end_date) : null
+}
+
+/**
  * Day one is the first open after the start; the start evening is day 0.
  * @param {Database} db
  * @param {string} date
@@ -189,7 +202,11 @@ export function marketStatus(db, at) {
  * @param {string | null} latest
  */
 function hero(db, latest) {
-  const { starting_cash_micro: startingCashMicro } = /** @type {{ starting_cash_micro: number }} */ (db.query('SELECT starting_cash_micro FROM settings WHERE id = 1').get())
+  const { starting_cash_micro: settingCash } = /** @type {{ starting_cash_micro: number }} */ (db.query('SELECT starting_cash_micro FROM settings WHERE id = 1').get())
+  // What the active AI Traders actually started with; before the start, the setting.
+  const starts = db.query(`SELECT DISTINCT l.amount_micro FROM cash_ledger l JOIN traders t ON t.id = l.trader_id
+                           WHERE l.kind = 'start' AND t.kind = 'ai' AND t.status <> 'retired' ORDER BY l.amount_micro`).values().map(([a]) => Number(a))
+  const startingCashMicro = starts[0] ?? settingCash
   const valueOn = db.prepare('SELECT total_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?')
   const daily = /** @type {Array<{ id: number, name: string, kind: string, colourSlot: number | null }>} */ (
     db.query(`SELECT id, name, kind, colour_slot AS colourSlot FROM traders
@@ -198,7 +215,8 @@ function hero(db, latest) {
   return {
     traders: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM traders WHERE kind = 'ai' AND status <> 'retired'").get()).n,
     startingCashMicro,
-    totalDays: PAPER_PHASE_DAYS,
+    cashVaries: starts.length > 1,
+    totalDays: plannedDays(db),
     trades: /** @type {{ n: number }} */ (db.query('SELECT COUNT(*) AS n FROM fills').get()).n,
     daily: daily.map((t) => ({
       ...t,

@@ -67,7 +67,7 @@ function OverviewPage() {
         ${() => (overview.data() ? MarketStatus({ market: overview.data().status.market, changesAt: overview.data().status.changesAt, now: clock.now }) : '')}
       </div>
 
-      ${Loadable(overview, (o) => html`${LandingHero({ hero: o.hero, day: o.status.day, started: o.status.state !== 'setup', onAhead: toAhead, onCast: navigate('/cast') })}
+      ${Loadable(overview, (o) => html`${LandingHero({ hero: o.hero, state: o.status.state, day: o.status.day, onAhead: toAhead, onCast: navigate('/cast') })}
         ${o.status.state === 'setup' || !o.status.latestDate ? NotStarted(o.status.state) : Board(o)}`)}
     </div>
   `
@@ -117,7 +117,7 @@ function NotStarted(state) {
       <p class="prompt prompt-caret">Status</p>
       <h2 id="ahead" class="mt-2 font-display text-2xl font-semibold text-fg">${state === 'setup' ? 'The experiment has not started yet' : 'Waiting for the first evening run'}</h2>
       <p class="mt-2 max-w-prose text-fg-soft">
-        Four AI Traders will each get $1,000 of virtual money and decide every evening what to buy and sell.
+        Each AI Trader will get the same amount of virtual money and decide what to buy and sell after the close.
         Their portfolios, trades and reasons will show up here once the first trading day has run.
       </p>
     </section>

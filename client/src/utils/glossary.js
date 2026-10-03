@@ -19,8 +19,8 @@ export const GLOSSARY = /** @type {const} */ ({
   'market view': 'The Trader\'s own summary of what the market did and what it thinks next, written with each decision.',
   journal: 'Private notes a Trader keeps for itself between runs. It reads them back before its next decision.',
   turnover: 'How much a Trader bought and sold in a day, as a share of its portfolio. High turnover means lots of trading.',
-  'daily track': 'The four Traders that decide every evening.',
-  'weekly track': 'The four Traders that decide once a week, after Friday\'s close. Same models, less trading.',
+  'daily track': 'The Traders that decide every evening.',
+  'weekly track': 'The Traders that decide once a week, after Friday\'s close. Same models, less trading.',
 })
 
 /** @typedef {keyof typeof GLOSSARY} GlossaryKey */

@@ -36,7 +36,7 @@ const AROUND = [
   { id: 'gallery', icon: 'gallery', name: 'Gallery', text: 'The public, once Cas switches it on. Reads everything, changes nothing.', when: 'once Cas opens it' },
 ]
 
-// Before the experiment starts there is no live line-up yet: show the four models.
+// Before the line-up is seeded there are no Traders yet: show the models it starts with.
 const MODELS = [{ name: 'Claude', colourSlot: 1 }, { name: 'GPT', colourSlot: 2 }, { name: 'Gemini', colourSlot: 3 }, { name: 'DeepSeek', colourSlot: 4 }]
 
 const card = 'flex h-full scroll-mt-4 flex-col gap-3 rounded-panel border border-line bg-surface-raised p-4 shadow-panel'
@@ -65,10 +65,10 @@ function CastPage() {
   const traders = useFetch('/api/traders')
   return html`
     <div class="flex flex-col gap-8">
-      ${PageHeader({ eyebrow: 'Market Jury · who does what', title: 'The cast', intro: 'Four AI models trade virtual money. Everyone else here is plain code with a job title.' })}
+      ${PageHeader({ eyebrow: 'Market Jury · who does what', title: 'The cast', intro: 'AI models trade virtual money. Everyone else here is plain code with a job title.' })}
       <article id="traders" class="${card}">
         <h2 class="${title}">The Traders</h2>
-        <p class="${text}">Eight AI agents, two per model, each with its own virtual money. Each colour is theirs for life.</p>
+        <p class="${text}">Each Trader is one AI model with its own virtual money, deciding every evening or once a week. Each colour is theirs for life.</p>
         ${Loadable(traders, (r) => TraderList(r.traders.filter((/** @type {any} */ t) => t.kind === 'ai')))}
         <p class="${when}">When · every trading day after the close</p>
       </article>

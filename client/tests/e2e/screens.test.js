@@ -129,7 +129,7 @@ async function openSection(page, title) {
 test('the Trade Master screens: settings, costs and the briefing pack', async ({ page }) => {
   await page.goto('/admin/settings')
   await expect(page.getByTestId('experiment-state')).toHaveText('Running')
-  await expect(page.getByRole('heading', { name: 'Running · Day 3 of 63' })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Running · Day 3', exact: true })).toBeVisible()
   await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible()
   // The line-up is open to begin with; the other sections fold away.
   await expect(page.getByRole('button', { name: 'Retire' })).toHaveCount(8)
@@ -224,9 +224,9 @@ test('The cast explains who does what, with the live line-up linked to each Trad
 
 test('the home page opens with the hero: live stats, the jury box and the market status', async ({ page }) => {
   await page.goto('/')
-  await expect(page.getByRole('heading', { name: '4 AI traders. $1,000 each. 3 months.', level: 1 })).toBeVisible()
-  await expect(page.getByText('A paper-trading experiment · Day 3 of 63')).toBeVisible()
-  await expect(page.getByText('3/63')).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Rival AIs. Same money, same news. Different trades.', level: 1 })).toBeVisible()
+  // The ticker's numbers are live: active Traders, starting cash, the day and trades so far.
+  await expect(page.getByTestId('hero-ticker')).toHaveText(/^> 8 AI Traders · \$1,000 each · Day 3 · \d+ trades so far$/)
   await expect(page.getByRole('img', { name: /^Daily Traders now: Claude \$1,0\d\d, GPT .*; The Index \$1,0\d\d$/ })).toBeVisible()
   // The seeded clock is past Friday's close, so the market is closed until Monday's open.
   await expect(page.getByRole('status').filter({ hasText: 'Market closed' })).toContainText(/opens \w{3} 09:30 NY|holiday/)

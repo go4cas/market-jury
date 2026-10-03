@@ -233,7 +233,7 @@ function ExperimentControl(s, { act, dryRun, running, lineUp }) {
 
   const copy = /** @type {Record<string, [string, any]>} */ ({
     setup: ['Ready to start?', html`Starting gives every Trader its starting cash and runs the first decisions on the evening of ${day(s.firstDecisionDate)}. It can be paused, not undone.`],
-    running: [`Running · Day ${s.day} of 63`, html`Every step runs on its own on the New York calendar. Pausing stops them until you resume.`],
+    running: [`Running · Day ${s.day}`, html`${s.totalDays ? `Pauses itself after day ${s.totalDays}. ` : ''}Every step runs on its own on the New York calendar. Pausing stops them until you resume.`],
     paused: ['Paused', html`Nothing runs until you resume. Queued orders are kept and fill at the next open after that.`],
     ended: ['The experiment has ended', html`Everything stays on the site to read.`],
   })
