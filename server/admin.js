@@ -11,7 +11,7 @@ import { defaultRules, dryRun, firstDecisionDate, pauseExperiment, resumeExperim
 import { openingBellDue, rerunStep, STEPS } from '../jobs/schedule.js'
 import { isTradeMaster } from './auth.js'
 import { error, json, readJson } from './http.js'
-import { dayNumber, latestDate } from './reads.js'
+import { dayNumber, plannedDays, latestDate } from './reads.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 /** @typedef {import('../jobs/schedule.js').StepContext} StepContext */
@@ -62,6 +62,7 @@ export function adminRoutes(ctx) {
           recentSteps: recent,
           missingKeys: Object.values(KEY_NAMES).filter((k) => !process.env[k]),
           day: dayNumber(db, latestDate(db) ?? marketDate(ctx.now())),
+          totalDays: plannedDays(db),
           nextOpen: nextOpen(db, ctx.now()),
         })
       }),

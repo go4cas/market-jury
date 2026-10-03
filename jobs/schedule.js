@@ -83,7 +83,7 @@ async function runTraders(ctx, date, cadence) {
   const { db } = ctx
   const { end_date: endDate } = /** @type {{ end_date: string | null }} */ (db.query('SELECT end_date FROM settings WHERE id = 1').get())
   // Orders decided on the last evening would fill after the end, so there are none.
-  if (endDate && date >= endDate) return { skipped: `Skipped: ${date} is the last day of the three-month paper phase, so the ${cadence} Traders don't decide tonight.` }
+  if (endDate && date >= endDate) return { skipped: `Skipped: ${date} is the experiment's last day, so the ${cadence} Traders don't decide tonight.` }
   if (!mayRun(budget(db, ctx.now()), `${cadence} trader`)) return { skipped: `Skipped: the month's projected spend has reached the budget ceiling, so the ${cadence} Traders pause.` }
   const pack = /** @type {{ id: number } | null} */ (db.query('SELECT id FROM briefing_packs WHERE kind = ? AND trading_date = ?').get(cadence, date))
   if (!pack) throw new Error(`There is no ${cadence} briefing pack for ${date}.`)
@@ -256,7 +256,7 @@ export async function tick(ctx) {
     }
   }
   const ended = finishPaperPhase(db, ctx.now())
-  if (ended) done.push({ step: 'end', date: ended, status: 'paused', note: 'The three-month paper phase is over, so the experiment paused itself.' })
+  if (ended) done.push({ step: 'end', date: ended, status: 'paused', note: 'The experiment reached its end date, so it paused itself.' })
   return done
 }
 

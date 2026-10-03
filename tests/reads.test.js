@@ -54,12 +54,21 @@ describe('Gallery reads', () => {
 
   test('the Overview carries what the landing hero shows', async () => {
     const { body } = await get('/api/overview')
-    expect(body.hero).toMatchObject({ traders: 8, startingCashMicro: 1_000_000_000, totalDays: 63 })
+    // The test calendar stops at the end of 2026, short of day 63, so no end date was set.
+    expect(body.hero).toMatchObject({ traders: 8, startingCashMicro: 1_000_000_000, totalDays: null })
     expect(body.hero.trades).toBe(db.query('SELECT COUNT(*) AS n FROM fills').get().n)
     // The jury box: every daily Trader still trading, then The Index.
     expect(body.hero.daily.map((/** @type {any} */ t) => t.name)).toEqual(['Claude daily', 'GPT daily', 'Gemini daily', 'DeepSeek daily', 'The Index'])
     expect(body.hero.daily[0]).toMatchObject({ kind: 'ai', colourSlot: 1 })
     expect(body.hero.daily[0].totalMicro).toBeGreaterThan(0)
+  })
+
+  test('the day count follows the end date, not a fixed three months', async () => {
+    // An end date set: Mon 7 Dec is day 9 (day one is Tue 24 Nov; Thanksgiving has no trading). Cleared after a resume past it: no total.
+    db.run("UPDATE settings SET end_date = '2026-12-07'")
+    expect((await get('/api/overview')).body.hero.totalDays).toBe(9)
+    db.run('UPDATE settings SET end_date = NULL')
+    expect((await get('/api/overview')).body.hero.totalDays).toBeNull()
   })
 
   test('the market status: open, opening soon, closed, and holidays', () => {
