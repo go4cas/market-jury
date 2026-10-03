@@ -17,6 +17,8 @@ const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs']
 // Trade Master pill when Cas is logged in, a link to the code on GitHub, the look
 // switch, and the paper-trading notice. Under 1024px the nav row hides behind a
 // Menu button (components/MainMenu.js); above it the row wraps, never scrolls.
+// The header stays at the top while the page scrolls under it, one row on a phone:
+// there the TRADE MASTER pill gives way to the menu's own Trade Master group.
 /** @param {any} content */
 export function AppLayout(content) {
   const signOut = async () => {
@@ -25,7 +27,7 @@ export function AppLayout(content) {
 
   return html`
     <div class="flex min-h-screen flex-col bg-surface">
-      <header class="border-b border-line bg-surface-raised">
+      <header data-app-header class="sticky top-0 z-40 border-b border-line bg-surface-raised">
         <div class="mx-auto flex max-w-6xl flex-wrap items-center gap-x-4 gap-y-1 px-4 py-2">
           <a href="/" class="flex min-h-11 items-center gap-2" @click="${/** @param {Event} e */ (e) => { e.preventDefault(); go('/') }}">
             <img src="/mark-terminal.svg" alt="" class="hidden h-8 w-8 dark:block" />
@@ -35,7 +37,7 @@ export function AppLayout(content) {
 
           <div class="ml-auto flex items-center gap-1">
             ${() => sessionState.tradeMaster
-              ? html`<span class="whitespace-nowrap rounded-full border border-brand px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-brand">TRADE MASTER</span>`
+              ? html`<span class="hidden whitespace-nowrap rounded-full border border-brand px-2.5 py-0.5 font-mono text-xs font-semibold tracking-wide text-brand sm:inline">TRADE MASTER</span>`
               : ''}
             ${GitHubLink()}
             ${ThemeToggle()}

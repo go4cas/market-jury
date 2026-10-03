@@ -10,6 +10,25 @@ const ui = reactive({ open: false })
 const bars = () => svg`<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M3 5.5h14M3 10h14M3 14.5h14"></path></svg>`
 const cross = () => svg`<svg width="20" height="20" viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15"></path></svg>`
 
+/**
+ * Keep --mj-header-h on <html> equal to the sticky header's height (one row on a phone,
+ * the logo row plus the nav row on a laptop), so the menu drops from its bottom edge and
+ * links to an anchor (#compliance-desk) land below it rather than under it.
+ */
+let observed = /** @type {Element | null} */ (null)
+/** @type {ResizeObserver | null} */
+let sizes = null
+function trackHeader() {
+  const header = document.querySelector('[data-app-header]')
+  if (!header || header === observed || typeof ResizeObserver === 'undefined') return
+  sizes ??= new ResizeObserver(([entry]) => {
+    document.documentElement.style.setProperty('--mj-header-h', `${Math.ceil(entry.target.getBoundingClientRect().height)}px`)
+  })
+  if (observed) sizes.unobserve(observed)
+  sizes.observe(header)
+  observed = header
+}
+
 /** Once the new page has drawn its heading, move focus there (the menu's link is gone). @param {string} to */
 function focusHeading(to, tries = 20) {
   const h1 = /** @type {HTMLElement | null} */ (document.querySelector('main h1'))
@@ -36,11 +55,12 @@ export function MenuPanel({ links, tradeMasterLinks, signOut }) {
     document.documentElement.classList.remove('overflow-hidden')
   }
   closed()
+  requestAnimationFrame(trackHeader)
   /** @param {Event} e */
   const onBeforeToggle = (e) => {
     const panel = /** @type {HTMLElement} */ (e.target)
     const opening = /** @type {ToggleEvent} */ (e).newState === 'open'
-    if (opening) panel.style.setProperty('--mj-header-h', `${Math.round(document.querySelector('header')?.getBoundingClientRect().bottom ?? 61)}px`)
+    if (opening) trackHeader()
     ui.open = opening
     // The page behind stays put while the menu is open.
     document.documentElement.classList.toggle('overflow-hidden', opening)
