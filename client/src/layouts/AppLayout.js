@@ -21,8 +21,9 @@ const TRADE_MASTER = [['/admin/settings', 'Settings'], ['/admin/costs', 'Costs']
 // there the TRADE MASTER pill gives way to the menu's own Trade Master group.
 /** @param {any} content */
 export function AppLayout(content) {
+  // With the Gallery open, signing out leaves Cas on the public home page.
   const signOut = async () => {
-    if (await sessionState.logout()) go('/login')
+    if (await sessionState.logout()) go(sessionState.galleryEnabled ? '/' : '/login')
   }
 
   return html`

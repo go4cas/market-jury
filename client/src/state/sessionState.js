@@ -25,6 +25,8 @@ export const sessionState = reactive({
   /**
    * Sign out. Only a confirmed sign-out clears the session; otherwise say so
    * and stay signed in, so a shared browser is never left signed in unawares.
+   * Then ask the server again whether the Gallery is open, so the caller knows
+   * where a signed-out visitor may land.
    * @returns {Promise<boolean>} whether the server signed the Trade Master out
    */
   async logout() {
@@ -34,6 +36,7 @@ export const sessionState = reactive({
       return false
     }
     this.tradeMaster = false
+    await this.load()
     return true
   },
 })

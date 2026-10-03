@@ -12,6 +12,16 @@ describe('sessionState.logout', () => {
     expect(sessionState.tradeMaster).toBe(false)
   })
 
+  it('reads the Gallery flag again after signing out', async () => {
+    vi.stubGlobal('fetch', vi.fn(async (/** @type {string} */ url) => url === '/api/session'
+      ? Response.json({ tradeMaster: false, galleryEnabled: true })
+      : new Response(null, { status: 204 })))
+    sessionState.tradeMaster = true
+    sessionState.galleryEnabled = false
+    expect(await sessionState.logout()).toBe(true)
+    expect(sessionState.galleryEnabled).toBe(true)
+  })
+
   it('stays signed in and says so when the server fails', async () => {
     vi.stubGlobal('fetch', vi.fn(async () => new Response('{}', { status: 500 })))
     sessionState.tradeMaster = true
