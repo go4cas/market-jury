@@ -7,6 +7,7 @@ import { btnDanger, btnPrimary, btnSecondary, confirmDialog, DialogHead, openDia
 import { Disclosure, disclosures } from '../../components/Disclosure.js'
 import { fresh, Loadable } from '../../components/Loadable.js'
 import { PageHeader } from '../../components/PageHeader.js'
+import { sessionState } from '../../state/sessionState.js'
 import { stepName } from '../../components/TradeMasterNotice.js'
 import { Term } from '../../components/Term.js'
 import { Ticker } from '../../components/Ticker.js'
@@ -280,7 +281,10 @@ function Rules(s, act, ui) {
     /** @type {Record<string, unknown>} */
     const body = { galleryEnabled: v.galleryEnabled === 'on', budgetCeilingUsd: Number(v.budgetCeilingUsd), positionCapPct: Number(v.positionCapPct), perTradeCostUsd: Number(v.perTradeCostUsd) }
     if (s.state === 'setup') body.startingCashUsd = Number(v.startingCashUsd)
-    if (await act('PATCH', '/api/admin/settings', body, 'Settings saved.')) ui.unsaved = false
+    if (await act('PATCH', '/api/admin/settings', body, 'Settings saved.')) {
+      ui.unsaved = false
+      sessionState.galleryEnabled = /** @type {boolean} */ (body.galleryEnabled)
+    }
   }}">
     <label class="flex min-h-11 items-center gap-3 sm:col-span-2">
       <input type="checkbox" name="galleryEnabled" class="h-5 w-5 accent-brand" checked="${s.galleryEnabled ? true : false}" />

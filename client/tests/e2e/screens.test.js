@@ -1,5 +1,5 @@
 import { test, expect } from '@playwright/test'
-import { E2E_SESSION_TOKEN } from './fixtures.js'
+import { E2E_SESSION_TOKEN, E2E_SIGN_OUT_TOKEN } from './fixtures.js'
 
 // The server is seeded with one week of the experiment (23 to 27 November 2026,
 // four trading days) on fake prices and recorded Trader answers.
@@ -195,6 +195,34 @@ test('a visitor reads the Gallery once the Trade Master opens it, but not the Tr
 
   // Close it again for the other tests.
   await page.reload()
+  await openSection(page, 'Rules and budget')
+  await page.getByRole('checkbox', { name: /Open the Gallery/ }).uncheck()
+  await page.getByRole('button', { name: 'Save settings' }).click()
+  await expect(page.getByText('Settings saved.')).toBeVisible()
+})
+
+test('signing out while the Gallery is open lands on the home page, Trade Master screens hidden', async ({ page, browser, baseURL }) => {
+  const context = await browser.newContext({ baseURL })
+  await context.addCookies([{ name: 'mj_session', value: E2E_SIGN_OUT_TOKEN, url: String(baseURL), httpOnly: true, secure: true, sameSite: 'Strict' }])
+  const cas = await context.newPage()
+  // Open the Gallery and sign out in the same visit, as Cas did.
+  await cas.goto('/admin/settings')
+  await openSection(cas, 'Rules and budget')
+  await cas.getByRole('checkbox', { name: /Open the Gallery/ }).check()
+  await cas.getByRole('button', { name: 'Save settings' }).click()
+  await expect(cas.getByText('Settings saved.')).toBeVisible()
+  await cas.getByRole('button', { name: 'Sign out' }).click()
+
+  await expect(cas).toHaveURL('/')
+  await expect(cas.getByRole('heading', { level: 1 })).toBeVisible()
+  await expect(cas.getByText('TRADE MASTER', { exact: true })).toHaveCount(0)
+  await expect(cas.getByRole('link', { name: 'Settings' })).toHaveCount(0)
+  await cas.goto('/admin/settings')
+  await expect(cas).toHaveURL('/login')
+  await context.close()
+
+  // Close it again for the other tests.
+  await page.goto('/admin/settings')
   await openSection(page, 'Rules and budget')
   await page.getByRole('checkbox', { name: /Open the Gallery/ }).uncheck()
   await page.getByRole('button', { name: 'Save settings' }).click()
