@@ -455,3 +455,9 @@ test('signed out with the Gallery closed, the login page still links to the note
   await expect(visitor.getByRole('heading', { name: 'Where data goes', level: 1 })).toBeVisible()
   await visitor.close()
 })
+
+test('robots.txt is a real file that keeps crawlers out of the Trade Master screens', async ({ request }) => {
+  const res = await request.get('/robots.txt')
+  expect(res.headers()['content-type']).toContain('text/plain')
+  expect(await res.text()).toContain('Disallow: /admin')
+})
