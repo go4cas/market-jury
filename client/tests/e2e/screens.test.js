@@ -319,3 +319,34 @@ test('IBM Plex comes from this site, not Google Fonts', async ({ page, baseURL }
   expect(fonts.length).toBeGreaterThan(0)
   expect(fonts.every((u) => u.startsWith(String(baseURL)))).toBe(true)
 })
+
+test('on a phone: Retire stays beside each Trader, cast names sit beside their icons, prices fit the screen', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 })
+  await page.goto('/admin/settings')
+  const rows = page.locator('li', { has: page.getByRole('button', { name: 'Retire' }) })
+  await expect(rows).toHaveCount(8)
+  for (const row of await rows.all()) {
+    const name = await row.locator('span').first().boundingBox()
+    const button = await row.getByRole('button', { name: 'Retire' }).boundingBox()
+    expect(button && name && button.x > name.x + 100 && button.y < name.y + name.height).toBe(true)
+  }
+
+  await page.goto('/cast')
+  for (const card of await page.locator('article', { has: page.locator('h3') }).all()) {
+    const icon = await card.locator('svg').first().boundingBox()
+    const title = await card.locator('h3').boundingBox()
+    expect(icon && title && Math.abs((icon.y + icon.height / 2) - (title.y + title.height / 2)) < 12).toBe(true)
+  }
+
+  await page.goto('/admin/briefing')
+  await expect(page.getByText('Biggest rises')).toBeVisible()
+  await expect(page.getByText('Biggest falls')).toBeVisible()
+  const prices = page.getByRole('region', { name: 'Prices for every ticker' })
+  await expect(prices.locator('tbody tr').first()).toBeVisible()
+  expect(await prices.evaluate((el) => el.scrollWidth <= el.clientWidth)).toBe(true)
+  expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true)
+
+  await page.goto('/admin/costs')
+  await expect(page.getByText('Budget per month')).toBeVisible()
+  await expect(page.getByTestId('budget-bar-caption')).toContainText('The tick at 90% is where the warning starts')
+})

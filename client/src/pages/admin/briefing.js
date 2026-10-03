@@ -19,7 +19,7 @@ export const meta = { layout: 'app', title: 'Briefing pack · Market Jury' }
 const at = (iso) => `${formatClock(new Date(iso), viewerTimeZone())} ${zoneLabel(new Date(iso), viewerTimeZone())}`
 
 const th = 'px-2 py-2 text-left font-mono text-xs font-medium uppercase tracking-wide text-fg-soft'
-const td = 'border-t border-line px-2 py-2 text-right font-mono text-sm text-fg'
+const td = 'whitespace-nowrap border-t border-line px-2 py-2 text-right font-mono text-sm text-fg'
 
 // Briefing pack: what did the Traders see? Prices, biggest moves and headlines, by date.
 function BriefingPage() {
@@ -44,7 +44,8 @@ function BriefingPage() {
           <p class="font-mono text-[13px] text-fg-soft">Built ${day(r.date)} at ${at(r.createdAt)} · ${p.prices.rows.length} tickers${p.missing.length ? ` · no prices for ${p.missing.join(', ')}` : ''}</p>
           <section class="flex flex-col gap-2"><h2 class="font-display text-2xl font-semibold text-fg">The market</h2>
             <p class="text-[15px] text-fg">${p.market.rose} rose, ${p.market.fell} fell, ${p.market.unchanged} unchanged.${p.market.spy ? html` SPY closed at $${p.market.spy.close.toFixed(2)} ${Delta(p.market.spy[change])}.` : ''}</p>
-            <p class="flex flex-wrap gap-x-4 gap-y-1 font-mono text-sm text-fg">${[...p.market.biggestRises, ...p.market.biggestFalls].map((/** @type {any} */ m) => html`<span>${m.ticker} ${Delta(m.change)}</span>`)}</p>
+            ${[['Biggest rises', p.market.biggestRises], ['Biggest falls', p.market.biggestFalls]].map(([label, moves]) => html`<div class="flex flex-col gap-1"><p class="prompt">${label}</p>
+              <p class="flex flex-wrap gap-x-4 gap-y-1 font-mono text-sm text-fg">${moves.map((/** @type {any} */ m) => html`<span class="whitespace-nowrap">${m.ticker} ${Delta(m.change)}</span>`)}</p></div>`)}
           </section>
           <section class="flex flex-col gap-2"><h2 class="font-display text-2xl font-semibold text-fg">Headlines</h2>
             <p class="text-sm text-fg-soft">Third-party text, given to the Traders as data only.</p>
@@ -55,10 +56,12 @@ function BriefingPage() {
             ${() => {
               const rows = p.prices.rows.filter((/** @type {any[]} */ row) => !ui.query || String(row[0]).toLowerCase().startsWith(ui.query) || String(r.names[row[0]] ?? '').toLowerCase().includes(ui.query))
               // Every ticker is listed; the table scrolls inside its own box, header kept in view.
+              // It fits a phone's width: names wrap under the ticker and Open hides, so the
+              // closing price and changes show without scrolling sideways.
               return fresh(ui.query, html`<p class="text-sm text-fg-soft">${ui.query ? `${rows.length} of ${p.prices.rows.length} match.` : `All ${p.prices.rows.length}, scroll to see them.`}</p>
-              <div class="max-h-[32rem] overflow-auto overscroll-contain rounded-control border border-line" tabindex="0" role="region" aria-label="Prices for every ticker"><table class="w-full min-w-max border-collapse">
-                <thead class="sticky top-0 bg-surface-raised"><tr><th scope="col" class="${th}">Ticker</th><th scope="col" class="${`${th} text-right`}">Open</th><th scope="col" class="${`${th} text-right`}">Close</th><th scope="col" class="${`${th} text-right`}">${p.kind === 'weekly' ? 'Week' : 'Day'}</th><th scope="col" class="${`${th} text-right`}">Month</th></tr></thead>
-                <tbody>${rows.map((/** @type {any[]} */ row) => html`<tr><td class="border-t border-line px-2 py-2 text-sm">${Ticker(row[0], r.names[row[0]])}</td><td class="${td}">${row[col('open')].toFixed(2)}</td><td class="${td}">${row[col('close')].toFixed(2)}</td><td class="${td}">${Delta(row[col(change)])}</td><td class="${td}">${Delta(row[col('chg_1m')])}</td></tr>`.key(row[0]))}</tbody>
+              <div class="max-h-[32rem] overflow-auto overscroll-contain rounded-control border border-line" tabindex="0" role="region" aria-label="Prices for every ticker"><table class="w-full border-collapse">
+                <thead class="sticky top-0 bg-surface-raised"><tr><th scope="col" class="${th}">Ticker</th><th scope="col" class="${`${th} hidden text-right sm:table-cell`}">Open</th><th scope="col" class="${`${th} text-right`}">Close</th><th scope="col" class="${`${th} text-right`}">${p.kind === 'weekly' ? 'Week' : 'Day'}</th><th scope="col" class="${`${th} text-right`}">Month</th></tr></thead>
+                <tbody>${rows.map((/** @type {any[]} */ row) => html`<tr><td class="border-t border-line px-2 py-2 text-sm">${Ticker(row[0], r.names[row[0]], { stacked: true })}</td><td class="${`${td} hidden sm:table-cell`}">${row[col('open')].toFixed(2)}</td><td class="${td}">${row[col('close')].toFixed(2)}</td><td class="${td}">${Delta(row[col(change)])}</td><td class="${td}">${Delta(row[col('chg_1m')])}</td></tr>`.key(row[0]))}</tbody>
               </table></div>`)
             }}
           </section>
