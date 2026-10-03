@@ -436,3 +436,12 @@ test('the header stays at the top while the page scrolls, on a laptop and a phon
   const menu = await page.locator('#main-menu').boundingBox()
   expect(menu && header && Math.abs(menu.y - header.height) <= 1).toBe(true)
 })
+
+test('every footer links to a short note on where data goes', async ({ page }) => {
+  await page.goto('/')
+  await page.getByRole('link', { name: 'About this site' }).click()
+  await expect(page).toHaveURL('/about')
+  await expect(page.getByRole('heading', { name: 'Where data goes', level: 1 })).toBeVisible()
+  await expect(page.getByText('There are no ads, no analytics and no tracking.')).toBeVisible()
+  await expect(page.getByText('each copy is deleted after 30 days', { exact: false })).toBeVisible()
+})

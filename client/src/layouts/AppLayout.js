@@ -57,7 +57,10 @@ export function AppLayout(content) {
       <main class="mx-auto w-full max-w-6xl flex-1 px-4 py-6">${TradeMasterNotice()}${content}</main>
 
       <footer class="border-t border-line">
-        <p class="mx-auto max-w-6xl px-4 py-4 font-mono text-xs text-fg-soft">Virtual money only. Not financial advice.</p>
+        <div class="mx-auto flex max-w-6xl flex-wrap items-center justify-between gap-x-4 px-4 py-2 font-mono text-xs text-fg-soft">
+          <p class="py-2">Virtual money only. Not financial advice.</p>
+          ${Link({ to: '/about', class: 'inline-flex min-h-11 items-center underline underline-offset-4 hover:text-fg', children: 'About this site' })}
+        </div>
       </footer>
     </div>
     ${ToastContainer()}
