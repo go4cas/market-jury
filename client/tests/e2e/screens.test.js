@@ -66,6 +66,9 @@ test('Standings rank a week with its badges', async ({ page }) => {
   await page.goto('/standings')
   await expect(page.getByRole('heading', { name: 'Week of 23–27 Nov' })).toBeVisible()
   await expect(page.getByRole('columnheader', { name: /Worst drop/ })).toBeVisible()
+  // Money in dollars beside the percentages: each Trader's value, and its cash with its share.
+  await expect(page.getByRole('columnheader', { name: /Value/ })).toBeVisible()
+  await expect(page.getByRole('row', { name: /Claude · Daily/ }).getByText(/^\$1,0\d\d\.\d\d$/)).toBeVisible()
   await expect(page.getByRole('list', { name: 'Badges' })).toBeVisible()
   await page.getByRole('button', { name: 'Since start' }).click()
   await expect(page.getByRole('heading', { name: 'Since the start, to Fri 27 Nov' })).toBeVisible()
@@ -460,4 +463,19 @@ test('robots.txt is a real file that keeps crawlers out of the Trade Master scre
   const res = await request.get('/robots.txt')
   expect(res.headers()['content-type']).toContain('text/plain')
   expect(await res.text()).toContain('Disallow: /admin')
+})
+
+test('Standings show dollars and fit a phone: four columns on Overview, two-line rows on the Standings page', async ({ page }) => {
+  await page.setViewportSize({ width: 360, height: 780 })
+  const noSidewaysScroll = () => page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)
+  await page.goto('/')
+  const box = page.getByRole('region', { name: 'Standings' }).getByRole('table')
+  await expect(box.getByRole('columnheader')).toHaveText([/^#/, /^Trader/, /^Value/, /^Cash/])
+  await expect(box.getByRole('row', { name: /Claude · Daily/ }).getByText(/^\$1,0\d\d\.\d\d/)).toBeVisible()
+  expect(await noSidewaysScroll()).toBe(true)
+
+  await page.goto('/standings')
+  await expect(page.getByRole('columnheader', { name: /Worst drop/ })).toBeHidden()
+  await expect(page.getByTestId('standings-summary').filter({ hasText: 'vs Index' }).first()).toContainText(/Cash \$[\d,]+ \(\d+%\) · vs Index [+−]?\d+\.\d% · Worst drop/)
+  expect(await noSidewaysScroll()).toBe(true)
 })

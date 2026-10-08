@@ -2,6 +2,7 @@
 // wrapped in Term() gets a dotted underline and opens its definition here.
 export const GLOSSARY = /** @type {const} */ ({
   portfolio: 'Everything a Trader owns: its cash plus the shares it holds, valued at the latest closing prices.',
+  value: 'Everything the Trader owns at the last close: shares at closing prices plus cash.',
   cash: 'Money a Trader has not put into any stock. Holding cash is a choice too: it cannot fall, but it cannot grow either.',
   position: 'The shares a Trader holds in one stock or fund.',
   'position cap': 'The rule that no single stock may be more than a set share of a portfolio (20% to start), so nobody bets everything on one name.',

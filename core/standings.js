@@ -39,6 +39,7 @@ export function periodStart(db, kind, end) {
  * @property {number | null} colourSlot
  * @property {string} status
  * @property {number} totalMicro value at the period's last close
+ * @property {number} cashMicro cash at the period's last close
  * @property {number} returnPct over the period
  * @property {number | null} vsIndexPct the period's return less The Index's over the same dates
  * @property {number} sinceStartPct
@@ -67,8 +68,8 @@ export function periodStart(db, kind, end) {
  * @param {string} end
  */
 function periodFigures(db, t, start, end) {
-  const totalOn = db.prepare('SELECT total_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?')
-  const endRow = /** @type {{ total_micro: number } | null} */ (totalOn.get(t.id, end))
+  const totalOn = db.prepare('SELECT total_micro, cash_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?')
+  const endRow = /** @type {{ total_micro: number, cash_micro: number } | null} */ (totalOn.get(t.id, end))
   if (!endRow) return null
   const before = start ? previousTradingDay(db, start) : null
   const baseRow = before ? /** @type {{ total_micro: number } | null} */ (totalOn.get(t.id, before)) : null
@@ -97,6 +98,7 @@ function periodFigures(db, t, start, end) {
     // null when there is none (the Trader started within it).
     baseDate: baseRow ? before : null,
     totalMicro: endRow.total_micro,
+    cashMicro: endRow.cash_micro,
     returnPct: base ? round2((endRow.total_micro / base - 1) * 100) : 0,
     sinceStartPct: metricAt('return_pct'),
     maxDrawdownPct: round2(worst * 100),
@@ -171,6 +173,7 @@ export function standings(db, { track, kind, end }) {
       colourSlot: t.colour_slot,
       status: t.status,
       totalMicro: f.totalMicro,
+      cashMicro: f.cashMicro,
       returnPct: f.returnPct,
       vsIndexPct: vsIndex(t, f),
       sinceStartPct: f.sinceStartPct,
