@@ -53,7 +53,8 @@ describe('a Trader run', () => {
     expect(prompt[0].content).toContain('no ticker is more than 20% of your portfolio')
     const [shared, mine] = prompt[1].content
     expect(shared.text.startsWith('<briefing_pack kind="daily" date="2026-11-02">')).toBe(true)
-    expect(shared.providerOptions).toEqual({ anthropic: { cacheControl: { type: 'ephemeral' } } })
+    // No Anthropic cache marker: each pack has one Claude reader, so a cache write would never be read.
+    expect(shared.providerOptions).toBeUndefined()
     expect(mine.text).toContain('"total_value_usd":1000')
     expect(mine.text).toContain('(empty: this is your first run)')
     expect(mock.calls[0].reasoning).toBe('medium')
@@ -186,6 +187,31 @@ describe('the Market Columnist', () => {
     expect(mock.calls[0].reasoning).toBe('provider-default')
     const again = await writeColumn({ db, kind: 'daily', date: TUE, now, languageModel: () => { throw new Error('should not call') } })
     expect(again).toEqual({ ok: true, postId: result.postId, costMicro: 0 })
+  })
+
+  test('gives the recap a facts line, the market summary, and says which orders have not filled yet', async () => {
+    ensureColumnistModels(db, NOW)
+    anIndex(db, { startedOn: TUE })
+    await run(mockModel([answer()]))
+    ringOpeningBell(db, { date: TUE, now: NOW })
+    closeOfDay(db, TUE)
+    // Tuesday evening: the Trader decides again; those orders wait for Wednesday's open.
+    db.query("INSERT INTO briefing_packs (kind, trading_date, content, content_hash, created_at) VALUES ('daily', ?, ?, 'y', ?)")
+      .run(TUE, JSON.stringify({ kind: 'daily', tradingDate: TUE, market: { rose: 3, fell: 2, unchanged: 0, spy: { close: 600 } }, prices: { columns: ['ticker', 'close'], rows: [['AAPL', 200]] } }), NOW.toISOString())
+    const tuesdayPack = /** @type {{ id: number }} */ (db.query("SELECT id FROM briefing_packs WHERE trading_date = ?").get(TUE)).id
+    await run(mockModel([answer()]), { packId: tuesdayPack })
+
+    const mock = mockModel([{ text: JSON.stringify(columnistDaily) }])
+    await writeColumn({ db, kind: 'daily', date: TUE, now, languageModel: () => mock.model, sleep: noSleep })
+    const record = JSON.parse(mock.calls[0].prompt[1].content[0].text.replace(/^[\s\S]*?<record[^>]*>\n/, '').replace(/\n<\/record>$/, ''))
+    expect(record.facts.summary).toContain('1 of 1 AI Traders decided on 2026-11-03')
+    expect(record.facts.summary).toContain('The Index')
+    expect(record.market).toEqual({ rose: 3, fell: 2, unchanged: 0, spy: { close: 600 } })
+    const claude = record.traders.find((/** @type {any} */ t) => t.trader === 'Claude daily')
+    expect(claude).toHaveProperty('period_change_pct')
+    expect(claude).not.toHaveProperty('change_pct')
+    const tuesday = claude.decisions.find((/** @type {any} */ d) => d.date === TUE)
+    expect(tuesday.orders.map((/** @type {any} */ o) => o.status)).toContain('queued for the next open, not bought or sold yet')
   })
 
   test('says so when no model is set', async () => {
