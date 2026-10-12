@@ -7,6 +7,8 @@ import { marketDate } from '../core/calendar.js'
 
 const SYMBOLS_PER_REQUEST = 100
 const ATTEMPTS = 3
+// The free plan refuses SIP data newer than 15 minutes; one more for clock drift.
+const RECENT_LIMIT_MS = 16 * 60_000
 /** One request may take this long before it is given up (and tried again). */
 const REQUEST_TIMEOUT_MS = 30_000
 /** Pages followed for one question at most; a real answer needs far fewer. */
@@ -52,6 +54,7 @@ const MAX_PAGES = 500
  * @param {string} [options.feed] 'sip' (all US exchanges; the default) or 'iex'
  * @param {(input: string | URL | Request, init?: RequestInit) => Promise<Response>} [options.fetch]
  * @param {(ms: number) => Promise<void>} [options.sleep]
+ * @param {() => Date} [options.now]
  */
 export function createAlpaca({
   keyId,
@@ -61,6 +64,7 @@ export function createAlpaca({
   feed = 'sip',
   fetch = globalThis.fetch,
   sleep = Bun.sleep,
+  now = () => new Date(),
 }) {
   const headers = { 'APCA-API-KEY-ID': keyId ?? '', 'APCA-API-SECRET-KEY': secretKey ?? '', Accept: 'application/json' }
 
@@ -133,12 +137,16 @@ export function createAlpaca({
      * @returns {Promise<Bar[]>}
      */
     async dailyBars(tickers, start, end) {
+      // A bare end date reads as "to the end of that day", and the free plan
+      // refuses SIP data from the last 15 minutes, so a day still running was
+      // refused until New York midnight. Ask only up to 16 minutes ago.
+      const until = new Date(Math.min(now().getTime() - RECENT_LIMIT_MS, Date.parse(`${end}T23:59:59Z`))).toISOString()
       /** @type {Bar[]} */
       const out = []
       for (let i = 0; i < tickers.length; i += SYMBOLS_PER_REQUEST) {
         const symbols = tickers.slice(i, i + SYMBOLS_PER_REQUEST).join(',')
         const bars = await allPages(async (page_token) => {
-          const body = await get(dataUrl, '/v2/stocks/bars', { symbols, timeframe: '1Day', start, end, adjustment: 'raw', feed, limit: 10000, page_token })
+          const body = await get(dataUrl, '/v2/stocks/bars', { symbols, timeframe: '1Day', start, end: until, adjustment: 'raw', feed, limit: 10000, page_token })
           const items = Object.entries(body.bars ?? {}).flatMap(([ticker, list]) =>
             /** @type {any[]} */ (list).map((b) => ({
               ticker,

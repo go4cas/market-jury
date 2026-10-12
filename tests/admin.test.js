@@ -54,7 +54,7 @@ beforeEach(() => {
       db,
       now: () => clock,
       menu: TEST_MENU,
-      alpaca: createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(testMarket(), { pageSize: 500 }).fetch, sleep: async () => {} }),
+      alpaca: createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(testMarket(), { pageSize: 500 }).fetch, sleep: async () => {}, now: () => clock }),
       languageModel: () => model,
       sleep: async () => {},
     },

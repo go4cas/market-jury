@@ -20,7 +20,7 @@ import { readRoutes } from './reads.js'
  */
 export function startServer({ db, port, clientDir, now, steps }) {
   const root = resolve(clientDir)
-  const context = steps ?? { db, now: () => new Date(now ? now() : Date.now()), alpaca: createAlpaca(config.alpaca) }
+  const context = steps ?? { db, now: () => new Date(now ? now() : Date.now()), alpaca: createAlpaca({ ...config.alpaca, now: () => new Date(now ? now() : Date.now()) }) }
 
   return Bun.serve({
     port,

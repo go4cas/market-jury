@@ -289,9 +289,11 @@ function finishPaperPhase(db, now) {
  * @param {{ status: string, error: string | null, at: string, attempt: number }} r
  */
 function record(db, step, date, { status, error, at, attempt }) {
-  db.run(`INSERT INTO step_runs (step, trading_date, status, attempt, started_at, finished_at, error) VALUES (?, ?, ?, ?, ?, ?, ?)
-          ON CONFLICT (step, trading_date) DO UPDATE SET status = excluded.status, finished_at = excluded.finished_at, error = excluded.error`,
-    [step, date, status, attempt, at, at, error])
+  const lastError = status === 'failed' ? error : null
+  db.run(`INSERT INTO step_runs (step, trading_date, status, attempt, started_at, finished_at, error, last_error) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+          ON CONFLICT (step, trading_date) DO UPDATE SET status = excluded.status, finished_at = excluded.finished_at, error = excluded.error,
+            last_error = COALESCE(excluded.last_error, step_runs.last_error)`,
+    [step, date, status, attempt, at, at, error, lastError])
 }
 
 /**
