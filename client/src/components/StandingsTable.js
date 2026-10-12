@@ -21,7 +21,8 @@ import { TraderName } from './TraderMark.js'
  * @property {number} maxDrawdownPct
  * @property {number} cashSharePct
  * @property {number} trades
- * @property {number} ruleBreaks
+ * @property {number} trimmed
+ * @property {number} rejected
  */
 
 const th = 'px-2 py-2 text-left font-mono text-xs font-medium uppercase tracking-wide text-fg-soft'
@@ -54,7 +55,7 @@ export function StandingsTable({ rows, returnLabel, compact = false }) {
           ${compact ? '' : html`<th scope="col" class="${wide}">Worst drop${Hint('Worst drop')}</th>`}
           <th scope="col" class="${compact ? `${th} text-right` : wide}">Cash${Hint('Cash')}</th>
           ${compact ? '' : html`<th scope="col" class="${wide}">Trades</th>`}
-          ${compact ? '' : html`<th scope="col" class="${wide}">Rule breaks${Hint('Rule breaks')}</th>`}
+          ${compact ? '' : html`<th scope="col" class="${wide}">Trimmed / Rejected${Hint('Trimmed / Rejected')}</th>`}
         </tr></thead>
         <tbody>${rows.map((r) => html`<tr>
           <td class="${`${td} font-mono text-fg-soft`}">${r.rank}</td>
@@ -65,11 +66,19 @@ export function StandingsTable({ rows, returnLabel, compact = false }) {
           ${compact ? '' : html`<td class="${wideTd}">${drop(r)}</td>`}
           <td class="${compact ? `${td} whitespace-nowrap text-right font-mono text-fg` : `${wideTd} whitespace-nowrap`}">${cash(r)}</td>
           ${compact ? '' : html`<td class="${wideTd}">${r.trades}</td>`}
-          ${compact ? '' : html`<td class="${wideTd}">${r.ruleBreaks}</td>`}
+          ${compact ? '' : html`<td class="${`${wideTd} whitespace-nowrap`}">${cut(r)}</td>`}
         </tr>${compact ? '' : html`<tr class="sm:hidden" data-testid="standings-summary"><td></td><td colspan="3" class="pb-2.5 font-mono text-xs text-fg-soft">${summary(r).map((item, i) => html`${i ? ' · ' : ''}<span class="whitespace-nowrap">${item}</span>`)}</td></tr>`}`.key(r.traderId))}</tbody>
       </table>
     </div>
   `
+}
+
+// "3 / 1": orders the Compliance Desk trimmed, then those it rejected; zeros fade.
+/** @param {StandingRow} r */
+const cut = (r) => {
+  if (r.kind === 'benchmark') return html`<span class="text-fg-faint">—</span>`
+  const n = (/** @type {number} */ v) => html`<span class="${v ? '' : 'text-fg-faint'}">${v}</span>`
+  return html`${n(r.trimmed)} / ${n(r.rejected)}`
 }
 
 /** @param {StandingRow} r */
@@ -82,7 +91,7 @@ const cash = (r) => (r.kind === 'benchmark'
   : html`${usd(r.cashMicro)}<span class="block text-xs text-fg-soft">${pct(r.cashSharePct)}</span>`)
 
 /**
- * The phone row's second line: "Cash $312 (29%) · vs Index +7.7% · Worst drop −1.2% · 12 trades · 0 rule breaks".
+ * The phone row's second line: "Cash $312 (29%) · vs Index +7.7% · Worst drop −1.2% · 12 trades · 3 trimmed · 1 rejected".
  * @param {StandingRow} r
  */
 function summary(r) {
@@ -92,7 +101,7 @@ function summary(r) {
     ...(index ? [] : [`vs Index ${signedPct(r.vsIndexPct)}`]),
     `Worst drop ${drop(r)}`,
     `${r.trades} ${r.trades === 1 ? 'trade' : 'trades'}`,
-    `${r.ruleBreaks} ${r.ruleBreaks === 1 ? 'rule break' : 'rule breaks'}`,
+    ...(index ? [] : r.trimmed || r.rejected ? [r.trimmed ? `${r.trimmed} trimmed` : '', r.rejected ? `${r.rejected} rejected` : ''].filter(Boolean) : ['no orders cut']),
   ]
 }
 

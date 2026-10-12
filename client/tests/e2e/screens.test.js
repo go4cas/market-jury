@@ -68,6 +68,7 @@ test('Standings rank a week with its badges', async ({ page }) => {
   await expect(page.getByRole('columnheader', { name: /Worst drop/ })).toBeVisible()
   // Money in dollars beside the percentages: each Trader's value, and its cash with its share.
   await expect(page.getByRole('columnheader', { name: /Value/ })).toBeVisible()
+  await expect(page.getByRole('columnheader', { name: /Trimmed \/ Rejected/ })).toBeVisible()
   await expect(page.getByRole('row', { name: /Claude · Daily/ }).getByText(/^\$1,0\d\d\.\d\d$/)).toBeVisible()
   await expect(page.getByRole('list', { name: 'Badges' })).toBeVisible()
   await page.getByRole('button', { name: 'Since start' }).click()

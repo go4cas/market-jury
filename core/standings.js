@@ -46,7 +46,8 @@ export function periodStart(db, kind, end) {
  * @property {number} maxDrawdownPct the worst fall from a high within the period
  * @property {number} cashSharePct at the period's last close
  * @property {number} trades fills in the period
- * @property {number} ruleBreaks orders the Compliance Desk trimmed or rejected in the period
+ * @property {number} trimmed orders the Compliance Desk cut down to fit the rules, decided in the period
+ * @property {number} rejected orders the Compliance Desk refused outright, decided in the period
  */
 
 /**
@@ -59,6 +60,19 @@ export function periodStart(db, kind, end) {
  * @property {string} status
  * @property {string} started_on
  */
+
+/**
+ * How many of a Trader's real (not rehearsal) orders decided in [from, to] the
+ * Compliance Desk trimmed, and how many it rejected.
+ * @param {Database} db
+ * @param {number} traderId
+ * @param {string} from
+ * @param {string} to
+ */
+function verdicts(db, traderId, from, to) {
+  return /** @type {{ trimmed: number, rejected: number }} */ (db.query(`SELECT COALESCE(SUM(verdict = 'trimmed'), 0) AS trimmed, COALESCE(SUM(verdict = 'rejected'), 0) AS rejected
+      FROM orders WHERE trader_id = ? AND status <> 'dry_run' AND decided_on BETWEEN ? AND ?`).get(traderId, from, to))
+}
 
 /**
  * One Trader's figures over [start, end].
@@ -86,8 +100,6 @@ function periodFigures(db, t, start, end) {
   }
   /** @param {string} key */
   const metricAt = (key) => /** @type {{ value: number } | null} */ (db.query('SELECT value FROM metrics WHERE trader_id = ? AND trading_date = ? AND key = ?').get(t.id, end, key))?.value ?? 0
-  /** @param {string} key */
-  const metricSum = (key) => /** @type {{ v: number }} */ (db.query('SELECT COALESCE(SUM(value), 0) AS v FROM metrics WHERE trader_id = ? AND trading_date BETWEEN ? AND ? AND key = ?').get(t.id, from, end, key)).v
   const held = /** @type {{ v: number | null }} */ (db.query("SELECT MAX(value) AS v FROM metrics WHERE trader_id = ? AND trading_date BETWEEN ? AND ? AND key = 'positions'").get(t.id, from, end)).v ?? 0
   const cut = /** @type {{ n: number, days: number }} */ (db.query(`SELECT COALESCE(SUM(c.value), 0) AS n, COALESCE(SUM(c.value * d.value), 0) AS days FROM metrics c
       JOIN metrics d ON d.trader_id = c.trader_id AND d.trading_date = c.trading_date AND d.key = 'days_to_cut_loser'
@@ -104,7 +116,7 @@ function periodFigures(db, t, start, end) {
     maxDrawdownPct: round2(worst * 100),
     cashSharePct: metricAt('cash_share_pct'),
     trades: /** @type {{ n: number }} */ (db.query('SELECT COUNT(*) AS n FROM fills WHERE trader_id = ? AND trading_date BETWEEN ? AND ?').get(t.id, from, end)).n,
-    ruleBreaks: metricSum('rule_breaks'),
+    ...verdicts(db, t.id, from, end),
     heldShares: held > 0,
     daysToCutLoser: cut.n ? cut.days / cut.n : null,
   }
@@ -180,7 +192,8 @@ export function standings(db, { track, kind, end }) {
       maxDrawdownPct: f.maxDrawdownPct,
       cashSharePct: f.cashSharePct,
       trades: f.trades,
-      ruleBreaks: f.ruleBreaks,
+      trimmed: f.trimmed,
+      rejected: f.rejected,
     })
   })
   return out
