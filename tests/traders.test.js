@@ -207,6 +207,7 @@ describe('the Market Columnist', () => {
     expect(record.facts.summary).toContain('1 of 1 AI Traders decided on 2026-11-03')
     expect(record.facts.summary).toContain('The Index')
     expect(record.market).toEqual({ rose: 3, fell: 2, unchanged: 0, spy: { close: 600 } })
+    expect(record.platform_changes).toEqual([])
     const claude = record.traders.find((/** @type {any} */ t) => t.trader === 'Claude daily')
     expect(claude).toHaveProperty('period_change_pct')
     expect(claude).not.toHaveProperty('change_pct')

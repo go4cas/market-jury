@@ -6,6 +6,7 @@ import { closeInstant, firstTradingDayOfWeek, isLastTradingDayOfWeek, isTradingD
 import { closeOn, positionsOf, valuePortfolio, cashOf } from '../core/portfolio.js'
 import { positionsAsOf } from '../core/books.js'
 import { badgesFor, periodStart, standings } from '../core/standings.js'
+import { platformChanges } from '../core/changes.js'
 import { PAPER_PHASE_DAYS } from '../jobs/experiment.js'
 import { isTradeMaster } from './auth.js'
 import { error, json } from './http.js'
@@ -91,6 +92,15 @@ export function readRoutes({ db, now }) {
       GET: open((req) => {
         const t = trader(db, Number(req.params?.id))
         return t ?? error(404, 'There is no Trader with that number.')
+      }),
+    },
+
+    // The change log for the About page: open even while the Gallery is closed,
+    // like the page itself. It holds only what changed for the Traders, and when.
+    '/api/changes': {
+      GET: () => json({
+        startDate: /** @type {{ start_date: string | null }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get()).start_date,
+        changes: platformChanges(db),
       }),
     },
 
@@ -449,3 +459,4 @@ function trader(db, id) {
     metrics: [...metrics].map(([date, m]) => ({ date, ...m })),
   }
 }
+
