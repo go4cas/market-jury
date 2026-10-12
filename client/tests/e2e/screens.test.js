@@ -448,6 +448,8 @@ test('every footer links to a short note on where data goes', async ({ page }) =
   await expect(page.getByRole('heading', { name: 'Where data goes', level: 1 })).toBeVisible()
   await expect(page.getByText('There are no ads, no analytics and no tracking.')).toBeVisible()
   await expect(page.getByText('each copy is deleted after 30 days', { exact: false })).toBeVisible()
+  await expect(page.getByRole('heading', { name: 'Changes to what the Traders see' })).toBeVisible()
+  await expect(page.getByText('No changes since the experiment started on Mon 23 Nov')).toBeVisible()
 })
 
 test('signed out with the Gallery closed, the login page still links to the note on where data goes', async ({ browser, baseURL }) => {

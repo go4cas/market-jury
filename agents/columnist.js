@@ -4,6 +4,7 @@
 // numbers it is given.
 import { z } from 'zod'
 import { firstTradingDayOfWeek, previousTradingDay } from '../core/calendar.js'
+import { platformChanges } from '../core/changes.js'
 import { callModel } from './call.js'
 import { languageModel as defaultLanguageModel, modelRow } from './models.js'
 
@@ -110,6 +111,8 @@ export function columnistData(db, from, to) {
       note: 'Orders decided in this period fill at the next open: only "fills" are trades that happened. period_change_pct is the change over this period; return_since_start_pct is since each Trader began.',
     },
     market: pack ? JSON.parse(pack.content).market ?? null : null,
+    // What changed for the Traders in this period, so a shift in behaviour can be read against it.
+    platform_changes: platformChanges(db, { from, to }),
     traders: rows.map(({ decided: _d, cadence: _c, ...r }) => r),
   }
 }

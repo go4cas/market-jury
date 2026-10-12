@@ -43,6 +43,17 @@ describe('Gallery reads', () => {
     expect((await get('/api/overview', { cookie: '' })).status).toBe(200)
   })
 
+  test('the change log is open to everyone, newest first, with the start date for its empty state', async () => {
+    expect((await get('/api/changes', { cookie: '' })).body).toEqual({ startDate: '2026-11-23', changes: [] })
+    db.run("INSERT INTO platform_changes (effective_on, area, summary, pr_number, created_at) VALUES ('2026-11-24', 'Prompt', 'First change.', 40, 'x'), ('2026-11-30', 'Briefing pack', 'Second change.', 41, 'x')")
+    const { status, body } = await get('/api/changes', { cookie: '' })
+    expect(status).toBe(200)
+    expect(body.changes).toEqual([
+      { effectiveOn: '2026-11-30', area: 'Briefing pack', summary: 'Second change.', prNumber: 41 },
+      { effectiveOn: '2026-11-24', area: 'Prompt', summary: 'First change.', prNumber: 40 },
+    ])
+  })
+
   test('the Overview: status, movers, standings and the latest recap', async () => {
     const { body } = await get('/api/overview')
     expect(body.status).toMatchObject({ state: 'running', startDate: '2026-11-23', latestDate: '2026-11-27', day: 3, market: 'closed', changesAt: '2026-11-30T14:30:00.000Z' })
