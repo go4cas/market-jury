@@ -54,9 +54,17 @@ describe('Standings', () => {
     expect(rows.map((r) => [r.rank, r.name, r.returnPct])).toEqual([[1, 'Claude daily', 12.5], [2, 'GPT daily', 0], [2, 'The Index', 0]])
     expect(rows[0]).toMatchObject({
       traderId: ids.claude, kind: 'ai', colourSlot: null, totalMicro: toMicro(1125), cashMicro: toMicro(500), sinceStartPct: 12.5, vsIndexPct: 12.5,
-      maxDrawdownPct: 2.27, cashSharePct: 44.44, trades: 1, ruleBreaks: 0,
+      maxDrawdownPct: 2.27, cashSharePct: 44.44, trades: 1, trimmed: 0, rejected: 0,
     })
     expect(rows[2]).toMatchObject({ kind: 'benchmark', trades: 1 })
+  })
+
+  test('counts orders the Compliance Desk trimmed apart from those it rejected', () => {
+    // Friday evening: GPT asks for more than its 20% cap allows, and for a ticker off the menu.
+    checkOrders(db, { traderId: ids.gpt, runId: 1, date: FRI, orders: [buy('AAPL', 500), buy('NOPE', 100)], now: NOW })
+    const gpt = standings(db, { track: 'daily', kind: 'week', end: FRI }).find((r) => r.name === 'GPT daily')
+    expect(gpt).toMatchObject({ trimmed: 1, rejected: 1 })
+    expect(gpt).not.toHaveProperty('ruleBreaks')
   })
 
   test('a day ranks against the close before it', () => {
