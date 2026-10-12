@@ -1,6 +1,6 @@
 // The experiment's life: set up the line-up, rehearse with a dry run, start,
 // pause and resume. The Trade Master drives these from the admin screens.
-import { isTradingDay, marketDate, nextTradingDay } from '../core/calendar.js'
+import { isTradingDay, marketDate, nextTradingDay, tradingDaysBetween } from '../core/calendar.js'
 import { DEFAULT_RULES } from '../core/portfolio.js'
 import { createIndex, createTrader } from '../core/traders.js'
 import { ensureColumnistModels, ensureModel, LINE_UP } from '../agents/models.js'
@@ -25,6 +25,52 @@ export function lastDayFor(db, startDate) {
     db.query("SELECT date FROM trading_days WHERE calendar = 'XNYS' AND date > ? ORDER BY date LIMIT 1 OFFSET ?").get(startDate, PAPER_PHASE_DAYS - 1)
   )
   return row?.date ?? null
+}
+
+/**
+ * The experiment's day number: day one is the first open after the start; the start evening is day 0.
+ * @param {Database} db
+ * @param {string} date
+ */
+export function dayNumber(db, date) {
+  const { start_date: start } = /** @type {{ start_date: string | null }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get())
+  if (!start || date <= start) return 0
+  const dayOne = nextTradingDay(db, start)
+  return dayOne ? tradingDaysBetween(db, dayOne, date).length : 0
+}
+
+/** "Fri 13 Nov". @param {string} date */
+const shortDay = (date) => new Intl.DateTimeFormat('en-GB', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' }).format(new Date(`${date}T12:00:00Z`)).replace(',', '')
+
+/**
+ * Move the experiment's last trading day. Only a trading day after today, so
+ * tonight's orders still have an open to fill at. Checks first and throws a
+ * plain sentence; `apply` then changes it and lists the change for the About
+ * page, from the next evening the Traders decide (they are told the end date).
+ * @param {Database} db
+ * @param {unknown} value
+ * @param {Date} now
+ * @returns {{ date: string, apply: () => void }}
+ */
+export function checkEndDate(db, value, now) {
+  const s = settings(db)
+  if (s.experiment_state === 'setup') throw new Error('The last trading day can change once the experiment has started.')
+  if (s.experiment_state === 'ended') throw new Error('The experiment has ended.')
+  const date = typeof value === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(value) ? value : null
+  if (!date) throw new Error('Pick a date for the last trading day.')
+  if (date <= marketDate(now)) throw new Error('Pick a trading day after today.')
+  const last = /** @type {{ d: string | null }} */ (db.query("SELECT MAX(date) AS d FROM trading_days WHERE calendar = 'XNYS'").get()).d
+  if (!last || date > last) throw new Error(`The market calendar only runs to ${last ? shortDay(last) : 'today'}. Pick an earlier trading day.`)
+  if (!isTradingDay(db, date)) throw new Error(`Markets are closed on ${shortDay(date)}. Pick a trading day.`)
+  return {
+    date,
+    apply: () => {
+      if (date === s.end_date) return
+      db.run('UPDATE settings SET end_date = ?, updated_at = ? WHERE id = 1', [date, now.toISOString()])
+      db.run('INSERT INTO platform_changes (effective_on, area, summary, pr_number, created_at) VALUES (?, ?, ?, NULL, ?)',
+        [firstDecisionDate(db, now) ?? date, 'Rules', `Last trading day moved to ${shortDay(date)} (day ${dayNumber(db, date)}).`, now.toISOString()])
+    },
+  }
 }
 
 /**

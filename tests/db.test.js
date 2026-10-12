@@ -66,6 +66,6 @@ describe('migrations', () => {
       { ticker: 'AAPL', on_menu: 1, removed_on: null },
       { ticker: 'PSKY', on_menu: 0, removed_on: '2026-10-19' },
     ])
-    expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE effective_on = '2026-10-19'").get()).toEqual({ n: 4 })
+    expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE effective_on = '2026-10-19'").get()).toEqual({ n: 5 })
   })
 })

@@ -160,6 +160,41 @@ test('the Trade Master screens: settings, costs and the briefing pack', async ({
   await expect(prices.locator('tbody tr')).toHaveCount(1)
 })
 
+test('the last trading day can move to another trading day after today', async ({ page }) => {
+  // A fixed calendar, so the dialog's dates don't depend on the day the test runs.
+  const days = []
+  for (let d = new Date('2026-10-06T12:00:00Z'); days.length < 70; d.setUTCDate(d.getUTCDate() + 1)) {
+    if (d.getUTCDay() % 6) days.push(d.toISOString().slice(0, 10))
+  }
+  await page.route('**/api/admin/status', async (route) => {
+    const real = await (await route.fetch()).json()
+    await route.fulfill({ json: { ...real, state: 'running', today: '2026-10-12', endDate: days[62], endDay: 63, totalDays: 63, paperPhaseDays: 63, tradingDays: days } })
+  })
+  /** @type {any} */
+  let sent = null
+  await page.route('**/api/admin/settings', (route) => {
+    if (route.request().method() !== 'PATCH') return route.fallback()
+    sent = route.request().postDataJSON()
+    return route.fulfill({ json: { ok: true } })
+  })
+  await page.goto('/admin/settings')
+  await expect(page.getByTestId('end-line')).toHaveText("Last trading day Thu 31 Dec (day 63) · Change")
+  await page.getByRole('button', { name: 'Change', exact: true }).click()
+  const dialog = page.getByRole('dialog', { name: 'Change the last trading day' })
+  await expect(dialog.getByRole('button', { name: 'Keep day 63' })).toBeVisible()
+
+  await dialog.getByLabel('Last trading day').fill('2026-11-14')
+  await expect(dialog.getByRole('alert')).toHaveText('Markets are closed on Sat 14 Nov. Pick a trading day.')
+  await expect(dialog.getByRole('button', { name: 'Set the day' })).toHaveAttribute('aria-disabled', 'true')
+
+  await dialog.getByRole('button', { name: '6 weeks' }).click()
+  await expect(dialog.getByRole('status')).toHaveText('Day 30 · 6 weeks of trading · 25 trading days from today')
+  await expect(dialog.getByText('From the next evening run, the Traders are told they have 25 trading days left.')).toBeVisible()
+  await dialog.getByRole('button', { name: 'Set Mon 16 Nov' }).click()
+  await expect(page.getByText('Last trading day set to Mon 16 Nov (day 30)')).toBeVisible()
+  expect(sent).toEqual({ endDate: '2026-11-16' })
+})
+
 test('a dry run shows each Trader\'s answer with its orders and verdicts', async ({ page }) => {
   const order = { side: 'buy', ticker: 'AAPL', amountMicro: 300_000_000, sellAll: 0, reason: 'Steady gains; a core holding.', verdict: 'trimmed', note: 'Cut to the 20% position cap.', approvedAmountMicro: 200_000_000 }
   const result = {

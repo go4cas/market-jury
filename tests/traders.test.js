@@ -72,6 +72,21 @@ describe('a Trader run', () => {
     expect(db.query("SELECT reason FROM orders WHERE ticker = 'AAPL'").get()).toEqual({ reason: traderAnswer.orders[0].reason })
   })
 
+  test('tells the Trader when the experiment ends and that The Index is the yardstick', async () => {
+    db.run("UPDATE settings SET end_date = '2026-11-06'")
+    const mock = mockModel([answer()])
+    await run(mock)
+    const system = mock.calls[0].prompt[0].content
+    expect(system).toContain("The experiment's last trading day is 2026-11-06, 4 trading days after this one.")
+    expect(system).toContain('compared with The Index: SPY')
+
+    db.run('UPDATE settings SET end_date = NULL')
+    db.run('DELETE FROM orders'); db.run('DELETE FROM decisions')
+    const again = mockModel([answer()])
+    await run(again)
+    expect(again.calls[0].prompt[0].content).toContain('The experiment has no set end date.')
+  })
+
   test('an answer in the wrong shape gets one repair attempt', async () => {
     const mock = mockModel([{ text: '{"orders": [], "market_view": "Quiet."}' }, answer()])
     const result = await run(mock)

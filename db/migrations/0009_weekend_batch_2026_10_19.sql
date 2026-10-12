@@ -14,5 +14,6 @@ FROM (
   UNION ALL SELECT '2026-10-19', 'Prompt', 'Each Trader''s portfolio now shows max_buy_usd, the position cap in dollars: the most it can buy of one ticker that evening.', 40
   UNION ALL SELECT '2026-10-19', 'Briefing pack', 'The weekly pack no longer repeats the week''s change in a second column (chg_1w).', 40
   UNION ALL SELECT '2026-10-19', 'Briefing pack', 'PSKY and WBD leave the stock menu: Alpaca has had no prices for them since 6 Oct. Holders can still sell.', 40
+  UNION ALL SELECT '2026-10-19', 'Prompt', 'Traders are told the experiment''s last trading day and how many trading days are left, and that The Index (SPY bought at the start and held) is the yardstick they are compared with.', 40
 ) AS c
 WHERE EXISTS (SELECT 1 FROM settings WHERE id = 1 AND start_date IS NOT NULL AND start_date < '2026-10-19');
