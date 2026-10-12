@@ -163,8 +163,9 @@ export async function runTrader({ db, traderId, packId, dryRun = false, now, lan
     messages: [{
       role: 'user',
       content: [
-        // The cache breakpoint: everything up to here is the same for every Trader on this cadence.
-        { type: 'text', text: shared, providerOptions: { anthropic: { cacheControl: { type: 'ephemeral' } } } },
+        // Shared part first. No Anthropic cache marker: only one Claude Trader reads each
+        // pack, so a cache write was never read back and only added its surcharge.
+        { type: 'text', text: shared },
         { type: 'text', text: mine },
       ],
     }],
