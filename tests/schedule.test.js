@@ -39,7 +39,7 @@ const context = (options = {}) => ({
   db,
   now,
   menu: TEST_MENU,
-  alpaca: createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(testMarket(), { pageSize: 500, ...options }).fetch, sleep: async () => {} }),
+  alpaca: createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(testMarket(), { pageSize: 500, ...options }).fetch, sleep: async () => {}, now }),
   languageModel: () => model,
   sleep: async () => {},
 })
@@ -130,6 +130,10 @@ describe('the scheduler', () => {
 
     rerunStep(db, 'floor-runner', '2026-11-23')
     expect((await tick(context())).map((r) => r.step)).toEqual(['floor-runner', 'daily-traders', 'daily-recap'])
+    // Success doesn't erase why it failed before.
+    const after = /** @type {{ status: string, last_error: string | null }} */ (db.query("SELECT status, last_error FROM step_runs WHERE step = 'floor-runner'").get())
+    expect(after.status).toBe('succeeded')
+    expect(after.last_error).toBeTruthy()
     expect(() => rerunStep(db, 'floor-runner', '2026-11-23')).toThrow('no failed or skipped')
   })
 

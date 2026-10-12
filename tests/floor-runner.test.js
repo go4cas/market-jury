@@ -10,7 +10,8 @@ let db
 let market = testMarket()
 
 const alpacaFor = (/** @type {ReturnType<typeof testMarket>} */ m) =>
-  createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(m, { pageSize: 500 }).fetch, sleep: async () => {} })
+  // Asked long after the test market's days, so every bar is old enough to send.
+  createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(m, { pageSize: 500 }).fetch, sleep: async () => {}, now: () => new Date('2027-01-01T00:00:00Z') })
 
 const run = (/** @type {string} */ date, alpaca = alpacaFor(market)) =>
   runFloorRunner({ db, alpaca, date, menu: TEST_MENU, now: () => new Date(`${date}T23:00:00Z`) })

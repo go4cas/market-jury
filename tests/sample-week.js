@@ -35,7 +35,7 @@ export const sampleSteps = (db, now) => ({
   db,
   now,
   menu: TEST_MENU,
-  alpaca: createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(testMarket(), { pageSize: 500 }).fetch, sleep: async () => {} }),
+  alpaca: createAlpaca({ keyId: 'k', secretKey: 's', fetch: fakeAlpacaFetch(testMarket(), { pageSize: 500 }).fetch, sleep: async () => {}, now }),
   languageModel: () => recordedModel,
   sleep: async () => {},
 })

@@ -32,7 +32,7 @@ const market = {
 
 const client = (options = {}) => {
   const fake = fakeAlpacaFetch(market, options)
-  const alpaca = createAlpaca({ keyId: 'key', secretKey: 'secret', fetch: fake.fetch, sleep: async () => {} })
+  const alpaca = createAlpaca({ keyId: 'key', secretKey: 'secret', fetch: fake.fetch, sleep: async () => {}, now: () => new Date('2027-01-01T00:00:00Z') })
   return { alpaca, fake }
 }
 
@@ -53,6 +53,16 @@ describe('Alpaca client', () => {
     const barRequest = fake.requests.find((u) => u.pathname === '/v2/stocks/bars')
     expect(barRequest?.searchParams.get('adjustment')).toBe('raw')
     expect(barRequest?.searchParams.get('timeframe')).toBe('1Day')
+  })
+
+  test('asks for bars up to 16 minutes ago, never a whole day still running, so the free plan answers', async () => {
+    const fake = fakeAlpacaFetch(market)
+    const now = new Date('2026-11-27T20:00:00Z')
+    const alpaca = createAlpaca({ keyId: 'key', secretKey: 'secret', fetch: fake.fetch, sleep: async () => {}, now: () => now })
+    await alpaca.dailyBars(['AAPL'], '2026-11-25', '2026-11-27')
+    await alpaca.dailyBars(['AAPL'], '2026-11-25', '2026-11-25')
+    const ends = fake.requests.filter((u) => u.pathname === '/v2/stocks/bars').map((u) => u.searchParams.get('end'))
+    expect(ends).toEqual(['2026-11-27T19:44:00.000Z', '2026-11-25T23:59:59.000Z'])
   })
 
   test('asks for bars in batches of symbols', async () => {
