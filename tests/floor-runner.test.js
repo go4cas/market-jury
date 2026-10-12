@@ -102,6 +102,9 @@ describe('Floor Runner', () => {
     expect(spy.open).toBe(711.5) // Monday's open
     expect(spy.close).toBe(713.5)
     expect(spy.chg_week).toBe(0.3) // vs the previous Friday's close, 711.5
+    // chg_1w would repeat chg_week on every row, so the weekly pack leaves it out.
+    expect(w.prices.columns).not.toContain('chg_1w')
+    expect(w.prices.rows[0]).toHaveLength(w.prices.columns.length)
   })
 
   test('skips days the market is closed', async () => {

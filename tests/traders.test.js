@@ -56,6 +56,9 @@ describe('a Trader run', () => {
     // No Anthropic cache marker: each pack has one Claude reader, so a cache write would never be read.
     expect(shared.providerOptions).toBeUndefined()
     expect(mine.text).toContain('"total_value_usd":1000')
+    // The 20% cap in dollars: the most it can buy of one new ticker tonight.
+    expect(mine.text).toContain('"max_buy_usd":200')
+    expect(prompt[0].content).toContain('max_buy_usd')
     expect(mine.text).toContain('(empty: this is your first run)')
     expect(mock.calls[0].reasoning).toBe('medium')
 

@@ -1,4 +1,4 @@
-{"version":"2026-10-01","source":"S&P 500 members from github.com/datasets/s-and-p-500-companies (commit 05a928d, 2026-09-21) plus the PRD's 21 major ETFs","instruments":[
+{"version":"2026-10-19","source":"S&P 500 members from github.com/datasets/s-and-p-500-companies (commit 05a928d, 2026-09-21) plus the PRD's 21 major ETFs","instruments":[
 {"ticker":"A","name":"Agilent Technologies","assetClass":"stock"},
 {"ticker":"AAPL","name":"Apple Inc.","assetClass":"stock"},
 {"ticker":"ABBV","name":"AbbVie","assetClass":"stock"},
@@ -382,7 +382,6 @@
 {"ticker":"PPL","name":"PPL Corporation","assetClass":"stock"},
 {"ticker":"PRU","name":"Prudential Financial","assetClass":"stock"},
 {"ticker":"PSA","name":"Public Storage","assetClass":"stock"},
-{"ticker":"PSKY","name":"Paramount Skydance Corporation","assetClass":"stock"},
 {"ticker":"PSX","name":"Phillips 66","assetClass":"stock"},
 {"ticker":"PTC","name":"PTC Inc.","assetClass":"stock"},
 {"ticker":"PWR","name":"Quanta Services","assetClass":"stock"},
@@ -489,7 +488,6 @@
 {"ticker":"VZ","name":"Verizon","assetClass":"stock"},
 {"ticker":"WAB","name":"Wabtec","assetClass":"stock"},
 {"ticker":"WAT","name":"Waters Corporation","assetClass":"stock"},
-{"ticker":"WBD","name":"Warner Bros. Discovery","assetClass":"stock"},
 {"ticker":"WDAY","name":"Workday, Inc.","assetClass":"stock"},
 {"ticker":"WDC","name":"Western Digital","assetClass":"stock"},
 {"ticker":"WEC","name":"WEC Energy Group","assetClass":"stock"},

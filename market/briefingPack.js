@@ -40,29 +40,82 @@ function adjustedClose(db, instrumentId, pastDate, asOf) {
   return splits.reduce((close, s) => (close * s.split_from) / s.split_to, bar.close_micro)
 }
 
+// Headlines worth a Trader's attention: about a ticker on the menu, or about the
+// market as a whole. Untagged items are kept only when they read as broad-market
+// news; analyst rating notes on companies off the menu are dropped.
+const BROAD_MARKET = /\b(stocks?|market|markets|S&P|Dow|Nasdaq|Wall Street|Fed|Federal Reserve|inflation|CPI|PPI|payrolls?|jobs report|unemployment|Treasury|Treasuries|yields?|interest rates?|rate (cut|hike)s?|GDP|recession|economy|economic|tariffs?|oil|crude|dollar|earnings season|futures)\b/i
+const RATING_NOTE = /\b(price target|maintains|reiterates|initiates|upgrades?|downgrades?|overweight|underweight|outperform|underperform|rating)\b/i
+const HEADLINE_SLICES = { daily: 4, weekly: 7 }
+const PER_TICKER = { daily: 3, weekly: 4 }
+
 /**
- * Headlines published in a window, newest first, with only menu tickers attached.
+ * @typedef {object} Headline
+ * @property {number} id
+ * @property {string} publishedAt
+ * @property {string} source
+ * @property {string[]} tickers menu tickers only
+ * @property {string} headline
+ */
+
+/**
+ * Choose headlines instead of taking the newest: keep what matters, spread the
+ * picks over the window (each time slice gets a share, unused shares go to the
+ * newest leftovers), and cap how many any one ticker gets. Newest first.
+ * @param {Headline[]} candidates
+ * @param {{ after: Date, until: Date, limit: number, slices: number, perTicker: number }} o
+ * @returns {Headline[]}
+ */
+export function pickHeadlines(candidates, { after, until, limit, slices, perTicker }) {
+  const relevant = candidates
+    .filter((h) => h.tickers.length > 0 || (BROAD_MARKET.test(h.headline) && !RATING_NOTE.test(h.headline)))
+    .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.id - a.id)
+  const span = until.getTime() - after.getTime()
+  const sliceOf = (/** @type {Headline} */ h) => Math.min(slices - 1, Math.max(0, Math.floor(((Date.parse(h.publishedAt) - after.getTime()) / span) * slices)))
+  /** @type {Map<string, number>} */
+  const perTickerCount = new Map()
+  /** @type {Set<number>} */
+  const chosen = new Set()
+  const take = (/** @type {Headline} */ h) => {
+    if (chosen.size >= limit || chosen.has(h.id) || h.tickers.some((t) => (perTickerCount.get(t) ?? 0) >= perTicker)) return false
+    chosen.add(h.id)
+    for (const t of h.tickers) perTickerCount.set(t, (perTickerCount.get(t) ?? 0) + 1)
+    return true
+  }
+  const share = Math.ceil(limit / slices)
+  for (let s = slices - 1; s >= 0; s--) {
+    let taken = 0
+    for (const h of relevant) if (taken < share && sliceOf(h) === s && take(h)) taken++
+  }
+  for (const h of relevant) take(h)
+  return relevant.filter((h) => chosen.has(h.id))
+}
+
+/**
+ * Headlines published in a window, chosen by pickHeadlines, with only menu tickers attached.
  * @param {Database} db
  * @param {Date} after
  * @param {Date} until
+ * @param {'daily' | 'weekly'} kind
  * @param {number} limit
+ * @returns {Headline[]}
  */
-function headlines(db, after, until, limit) {
+function headlines(db, after, until, kind, limit) {
   const rows = /** @type {Array<{ id: number, headline: string, source: string, published_at: string, tickers: string | null }>} */ (
     db.query(`SELECT n.id, n.headline, n.source, n.published_at, group_concat(i.ticker) AS tickers
               FROM news_items n
               LEFT JOIN news_tickers nt ON nt.news_id = n.id
-              LEFT JOIN instruments i ON i.id = nt.instrument_id
+              LEFT JOIN instruments i ON i.id = nt.instrument_id AND i.on_menu = 1
               WHERE n.published_at > ? AND n.published_at <= ?
-              GROUP BY n.id ORDER BY n.published_at DESC LIMIT ?`).all(after.toISOString(), until.toISOString(), limit)
+              GROUP BY n.id`).all(after.toISOString(), until.toISOString())
   )
-  return rows.map((r) => ({
+  const candidates = rows.map((r) => ({
     id: r.id,
     publishedAt: r.published_at,
     source: r.source,
     tickers: r.tickers ? r.tickers.split(',').sort() : [],
     headline: r.headline,
   }))
+  return pickHeadlines(candidates, { after, until, limit, slices: HEADLINE_SLICES[kind], perTicker: PER_TICKER[kind] })
 }
 
 /** @param {number} micro */
@@ -167,7 +220,7 @@ export function buildDailyPack(db, date, { menuVersion, now }) {
     market: marketSummary(rows, COLUMNS, COLUMNS.indexOf('chg_1d')),
     prices: { columns: COLUMNS, rows },
     missing,
-    headlines: headlines(db, after, close, DAILY_HEADLINES),
+    headlines: headlines(db, after, close, 'daily', DAILY_HEADLINES),
   }
 }
 
@@ -181,9 +234,12 @@ export function buildDailyPack(db, date, { menuVersion, now }) {
 export function buildWeeklyPack(db, date, { menuVersion, now }) {
   const weekStart = /** @type {string} */ (firstTradingDayOfWeek(db, date))
   const previousWeekClose = previousTradingDay(db, weekStart)
-  const { rows, missing } = priceRows(db, weekStart, date, previousWeekClose)
-  // The period change of a weekly row is the week's change.
-  const columns = COLUMNS.map((c) => (c === 'chg_1d' ? 'chg_week' : c))
+  const { rows: dailyShaped, missing } = priceRows(db, weekStart, date, previousWeekClose)
+  // The period change of a weekly row is the week's change; chg_1w (5 trading
+  // days back) would repeat it on every row, so it is left out.
+  const drop = COLUMNS.indexOf('chg_1w')
+  const columns = COLUMNS.map((c) => (c === 'chg_1d' ? 'chg_week' : c)).filter((_, i) => i !== drop)
+  const rows = dailyShaped.map((r) => r.filter((/** @type {unknown} */ _, /** @type {number} */ i) => i !== drop))
   const weekColumn = columns.indexOf('chg_week')
   checkComplete(date, rows, missing)
   const close = /** @type {Date} */ (closeInstant(db, date))
@@ -194,11 +250,11 @@ export function buildWeeklyPack(db, date, { menuVersion, now }) {
     weekStart,
     builtAt: now.toISOString(),
     menuVersion,
-    notes: { ...NOTES, prices: NOTES.prices.replace('1d = previous trading day', 'week = since the previous week\'s last close') },
+    notes: { ...NOTES, prices: NOTES.prices.replace('1d = previous trading day, 1w = 5, ', 'week = since the previous week\'s last close; ') },
     market: marketSummary(rows, columns, weekColumn),
     prices: { columns, rows },
     missing,
-    headlines: headlines(db, after, close, WEEKLY_HEADLINES),
+    headlines: headlines(db, after, close, 'weekly', WEEKLY_HEADLINES),
   }
 }
 
