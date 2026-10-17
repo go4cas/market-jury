@@ -56,6 +56,9 @@ describe('a Trader run', () => {
     // No Anthropic cache marker: each pack has one Claude reader, so a cache write would never be read.
     expect(shared.providerOptions).toBeUndefined()
     expect(mine.text).toContain('"total_value_usd":1000')
+    // The 20% cap in dollars: the most it can buy of one new ticker tonight.
+    expect(mine.text).toContain('"max_buy_usd":200')
+    expect(prompt[0].content).toContain('max_buy_usd')
     expect(mine.text).toContain('(empty: this is your first run)')
     expect(mock.calls[0].reasoning).toBe('medium')
 
@@ -67,6 +70,21 @@ describe('a Trader run', () => {
     // The $300 AAPL buy is trimmed to the 20% cap; reasons are kept word for word.
     expect(result.verdicts.map((v) => [v.ticker, v.verdict, v.approvedAmountMicro])).toEqual([['AAPL', 'trimmed', toMicro(200)], ['SPY', 'accepted', toMicro(150)]])
     expect(db.query("SELECT reason FROM orders WHERE ticker = 'AAPL'").get()).toEqual({ reason: traderAnswer.orders[0].reason })
+  })
+
+  test('tells the Trader when the experiment ends and that The Index is the yardstick', async () => {
+    db.run("UPDATE settings SET end_date = '2026-11-06'")
+    const mock = mockModel([answer()])
+    await run(mock)
+    const system = mock.calls[0].prompt[0].content
+    expect(system).toContain("The experiment's last trading day is 2026-11-06, 4 trading days after this one.")
+    expect(system).toContain('compared with The Index: SPY')
+
+    db.run('UPDATE settings SET end_date = NULL')
+    db.run('DELETE FROM orders'); db.run('DELETE FROM decisions')
+    const again = mockModel([answer()])
+    await run(again)
+    expect(again.calls[0].prompt[0].content).toContain('The experiment has no set end date.')
   })
 
   test('an answer in the wrong shape gets one repair attempt', async () => {

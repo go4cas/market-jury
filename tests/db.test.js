@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { readFileSync } from 'node:fs'
 import { openDb, migrate } from '../db/index.js'
 
 describe('migrations', () => {
@@ -49,5 +50,22 @@ describe('migrations', () => {
     migrate(db)
     expect(() => db.run("INSERT INTO traders (name, kind, cadence) VALUES ('Claude daily', 'ai', 'daily')")).toThrow()
     db.run("INSERT INTO traders (name, kind, cadence) VALUES ('The Index', 'benchmark', 'daily')")
+  })
+
+  test('the 19 Oct weekend batch takes PSKY and WBD off the menu and logs its changes, only for an experiment already running', () => {
+    const batch = readFileSync(new URL('../db/migrations/0009_weekend_batch_2026_10_19.sql', import.meta.url), 'utf8')
+    const db = openDb(':memory:')
+    migrate(db)
+    // A fresh install (no start date) gets nothing from it.
+    expect(db.query('SELECT COUNT(*) AS n FROM platform_changes').get()).toEqual({ n: 0 })
+    // The live experiment, started 5 Oct with PSKY on the menu: replay the batch against it.
+    db.run("UPDATE settings SET start_date = '2026-10-05' WHERE id = 1")
+    db.run("INSERT INTO instruments (ticker, name, added_on) VALUES ('PSKY', 'Paramount Skydance', '2026-10-01'), ('AAPL', 'Apple', '2026-10-01')")
+    db.run(batch)
+    expect(db.query('SELECT ticker, on_menu, removed_on FROM instruments ORDER BY ticker').all()).toEqual([
+      { ticker: 'AAPL', on_menu: 1, removed_on: null },
+      { ticker: 'PSKY', on_menu: 0, removed_on: '2026-10-19' },
+    ])
+    expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE effective_on = '2026-10-19'").get()).toEqual({ n: 5 })
   })
 })

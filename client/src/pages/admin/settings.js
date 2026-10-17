@@ -5,6 +5,7 @@ import { useToast } from '../../composables/useToast.js'
 import { Banner } from '../../components/Banner.js'
 import { btnDanger, btnPrimary, btnSecondary, confirmDialog, DialogHead, openDialog } from '../../components/Dialog.js'
 import { Disclosure, disclosures } from '../../components/Disclosure.js'
+import { endDateDialog } from '../../components/EndDateDialog.js'
 import { fresh, Loadable } from '../../components/Loadable.js'
 import { PageHeader } from '../../components/PageHeader.js'
 import { sessionState } from '../../state/sessionState.js'
@@ -234,17 +235,33 @@ function ExperimentControl(s, { act, dryRun, running, lineUp }) {
 
   const copy = /** @type {Record<string, [string, any]>} */ ({
     setup: ['Ready to start?', html`Starting gives every Trader its starting cash and runs the first decisions on the evening of ${day(s.firstDecisionDate)}. It can be paused, not undone.`],
-    running: [`Running · Day ${s.day}`, html`${s.totalDays ? `Pauses itself after day ${s.totalDays}. ` : ''}Every step runs on its own on the New York calendar. Pausing stops them until you resume.`],
+    running: [`Running · Day ${s.day}`, html`Every step runs on its own on the New York calendar. Pausing stops them until you resume.`],
     paused: ['Paused', html`Nothing runs until you resume. Queued orders are kept and fill at the next open after that.`],
     ended: ['The experiment has ended', html`Everything stays on the site to read.`],
   })
   const [title, line] = copy[s.state] ?? copy.setup
+
+  const changeEnd = async () => {
+    const date = await endDateDialog(s)
+    if (!date || date === s.endDate) return
+    const n = s.tradingDays.indexOf(date) + 1
+    act('PATCH', '/api/admin/settings', { endDate: date }, `Last trading day set to ${day(date)} (day ${n})`)
+  }
+  const change = html` · <button type="button" class="inline-flex min-h-11 items-center font-mono text-brand underline underline-offset-4" @click="${changeEnd}">Change</button>`
+  const endsAt = s.endDate ? `${day(s.endDate)} (day ${s.endDay})` : null
+  /** The last trading day under the title, with a way to move it once started. */
+  const endLine = {
+    setup: endsAt ? html`Ends ${endsAt}` : html`Ends after day ${s.endDay}`,
+    running: endsAt ? html`Last trading day ${endsAt}${change}` : html`No set last trading day${change}`,
+    paused: s.endDate && s.endDate <= s.today ? html`Paused after day ${s.endDay}${change}` : endsAt ? html`Last trading day ${endsAt}${change}` : html`No set last trading day${change}`,
+  }[/** @type {'setup' | 'running' | 'paused'} */ (s.state)] ?? ''
 
   return html`<section class="mj-control" aria-labelledby="experiment">
     <div class="flex max-w-[36em] flex-col gap-1">
       <p class="prompt prompt-caret" data-testid="experiment-state">${LABELS[s.state] ?? s.state}</p>
       <h2 id="experiment" class="font-display text-2xl font-semibold leading-[30px] text-fg">${title}</h2>
       <p class="text-[15px] leading-[22px] text-fg-soft">${line}${s.state === 'setup' ? html` ${() => `${active()} Traders are ready.`}` : ''}</p>
+      ${endLine ? html`<p class="font-mono text-[13px] text-fg-soft" data-testid="end-line">${endLine}</p>` : ''}
     </div>
     <div class="flex flex-wrap gap-2">
       ${s.state === 'setup' ? html`${dryButton()}<button type="button" class="${big(btnPrimary)}" @click="${start}">Start the experiment</button>` : ''}

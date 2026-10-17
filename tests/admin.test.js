@@ -131,6 +131,34 @@ describe('Trade Master routes', () => {
     expect(await data(call('/api/admin/settings'))).toMatchObject({ galleryEnabled: false, budgetCeilingUsd: 25, positionCapPct: 20 })
   })
 
+  test('moves the last trading day to a later trading day only, and lists the change', async () => {
+    const before = await call('/api/admin/settings', { method: 'PATCH', body: { endDate: '2026-12-04' } })
+    expect(await data(Promise.resolve(before))).toEqual({ error: 'The last trading day can change once the experiment has started.' })
+    expect(await data(call('/api/admin/status'))).toMatchObject({ state: 'setup', endDay: 63, paperPhaseDays: 63 })
+
+    await call('/api/admin/experiment/start', { method: 'POST', body: {} })
+    for (const [endDate, message] of [
+      ['2026-11-23', 'Pick a trading day after today.'],
+      ['2026-11-26', 'Markets are closed on Thu 26 Nov. Pick a trading day.'],
+      ['2026-11-28', 'Markets are closed on Sat 28 Nov. Pick a trading day.'],
+      ['next week', 'Pick a date for the last trading day.'],
+    ]) {
+      const res = await call('/api/admin/settings', { method: 'PATCH', body: { galleryEnabled: true, endDate } })
+      expect(await data(Promise.resolve(res))).toEqual({ error: message })
+    }
+    // A refused end date changes nothing else either.
+    expect(db.query('SELECT gallery_enabled FROM settings').get()).toEqual({ gallery_enabled: 0 })
+    expect(db.query('SELECT COUNT(*) AS n FROM platform_changes').get()).toEqual({ n: 0 })
+
+    expect((await call('/api/admin/settings', { method: 'PATCH', body: { endDate: '2026-12-04' } })).status).toBe(200)
+    const status = await data(call('/api/admin/status'))
+    expect(status).toMatchObject({ endDate: '2026-12-04', endDay: 8, totalDays: 8, today: '2026-11-23' })
+    expect(status.tradingDays.slice(0, 3)).toEqual(['2026-11-24', '2026-11-25', '2026-11-27'])
+    // Listed from tonight, the next evening the Traders decide and are told the new end.
+    expect(db.query('SELECT effective_on, area, summary, pr_number FROM platform_changes').all())
+      .toEqual([{ effective_on: '2026-11-23', area: 'Rules', summary: 'Last trading day moved to Fri 4 Dec (day 8).', pr_number: null }])
+  })
+
   test('a Trader added after the guardrails change trades under the new guardrails', async () => {
     await call('/api/admin/settings', { method: 'PATCH', body: { positionCapPct: 10, perTradeCostUsd: 1 } })
     expect(await data(call('/api/admin/settings'))).toMatchObject({ positionCapPct: 10, perTradeCostUsd: 1 })

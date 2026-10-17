@@ -7,7 +7,9 @@ import { closeOn, positionsOf, valuePortfolio, cashOf } from '../core/portfolio.
 import { positionsAsOf } from '../core/books.js'
 import { badgesFor, periodStart, standings } from '../core/standings.js'
 import { platformChanges } from '../core/changes.js'
-import { PAPER_PHASE_DAYS } from '../jobs/experiment.js'
+import { dayNumber, PAPER_PHASE_DAYS } from '../jobs/experiment.js'
+
+export { dayNumber }
 import { isTradeMaster } from './auth.js'
 import { error, json } from './http.js'
 
@@ -150,18 +152,6 @@ export function plannedDays(db) {
   const s = /** @type {{ start_date: string | null, end_date: string | null }} */ (db.query('SELECT start_date, end_date FROM settings WHERE id = 1').get())
   if (!s.start_date) return PAPER_PHASE_DAYS
   return s.end_date ? dayNumber(db, s.end_date) : null
-}
-
-/**
- * Day one is the first open after the start; the start evening is day 0.
- * @param {Database} db
- * @param {string} date
- */
-export function dayNumber(db, date) {
-  const { start_date: start } = /** @type {{ start_date: string | null }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get())
-  if (!start || date <= start) return 0
-  const dayOne = nextTradingDay(db, start)
-  return dayOne ? tradingDaysBetween(db, dayOne, date).length : 0
 }
 
 /**

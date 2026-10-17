@@ -7,7 +7,7 @@ import { rulesFor } from '../core/portfolio.js'
 import { createTrader, retireTrader } from '../core/traders.js'
 import { budget } from '../agents/budget.js'
 import { costOf, ensureModel, KEY_NAMES } from '../agents/models.js'
-import { defaultRules, dryRun, firstDecisionDate, pauseExperiment, resumeExperiment, seedLineUp, setStartingCash, settings, startExperiment } from '../jobs/experiment.js'
+import { checkEndDate, defaultRules, dryRun, firstDecisionDate, lastDayFor, PAPER_PHASE_DAYS, pauseExperiment, resumeExperiment, seedLineUp, setStartingCash, settings, startExperiment } from '../jobs/experiment.js'
 import { openingBellDue, rerunStep, STEPS } from '../jobs/schedule.js'
 import { isTradeMaster } from './auth.js'
 import { error, json, readJson } from './http.js'
@@ -63,6 +63,7 @@ export function adminRoutes(ctx) {
           missingKeys: Object.values(KEY_NAMES).filter((k) => !process.env[k]),
           day: dayNumber(db, latestDate(db) ?? marketDate(ctx.now())),
           totalDays: plannedDays(db),
+          ...endChoices(db, s, ctx.now()),
           nextOpen: nextOpen(db, ctx.now()),
         })
       }),
@@ -158,6 +159,7 @@ export function adminRoutes(ctx) {
         const cashMicro = 'startingCashUsd' in b ? toMicro(positive(b.startingCashUsd, 'Starting cash', 1_000_000)) : null
         /** @type {Record<string, number>} */
         const guardrails = {}
+        const end = 'endDate' in b ? checkEndDate(db, b.endDate, now) : null
         if ('positionCapPct' in b) {
           const pct = Number(b.positionCapPct)
           if (!(pct > 0)) throw new Error('The position cap must be more than zero.')
@@ -174,6 +176,7 @@ export function adminRoutes(ctx) {
           if (ceilingMicro !== null) db.run('UPDATE settings SET budget_ceiling_micro = ?, updated_at = ? WHERE id = 1', [ceilingMicro, at])
           if (cashMicro !== null) setStartingCash(db, cashMicro, now)
           if (Object.keys(guardrails).length) setGuardrails(db, guardrails, now)
+          end?.apply()
         })()
         return json({ ok: true })
       }),
@@ -330,4 +333,24 @@ function nextOpen(db, now) {
   if (open && open > now) return open.toISOString()
   const next = nextTradingDay(db, today)
   return next ? openInstant(db, next)?.toISOString() ?? null : null
+}
+
+/**
+ * The last trading day and what the Trade Master can move it to: before the
+ * start, the planned last day; once started, the trading days from day one
+ * (a day's number is its place in the list) for the Change dialog to check
+ * and count with.
+ * @param {import('bun:sqlite').Database} db
+ * @param {import('../jobs/experiment.js').Settings} s
+ * @param {Date} now
+ */
+function endChoices(db, s, now) {
+  const today = marketDate(now)
+  if (s.experiment_state === 'setup') {
+    const first = firstDecisionDate(db, now)
+    return { today, endDate: first ? lastDayFor(db, first) : null, endDay: PAPER_PHASE_DAYS, paperPhaseDays: PAPER_PHASE_DAYS, tradingDays: [] }
+  }
+  const dayOne = s.start_date ? nextTradingDay(db, s.start_date) : null
+  const tradingDays = dayOne ? db.query("SELECT date FROM trading_days WHERE calendar = 'XNYS' AND date >= ? ORDER BY date LIMIT 400").values(dayOne).map(([d]) => String(d)) : []
+  return { today, endDate: s.end_date, endDay: s.end_date ? dayNumber(db, s.end_date) : null, paperPhaseDays: PAPER_PHASE_DAYS, tradingDays }
 }
