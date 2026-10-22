@@ -532,7 +532,8 @@ export function compareTracks(db, a, b, { costs = false } = {}) {
   const indexLine = index ? rebased(snapshotsOf(index.id)) : null
   const indexReturn = indexLine ? lastValue(indexLine) : null
   const tradesOf = db.prepare('SELECT COUNT(*) AS n FROM fills WHERE trader_id = ? AND trading_date > ?')
-  const breaksOf = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE trader_id = ? AND verdict IN ('trimmed', 'rejected') AND status <> 'dry_run' AND decided_on >= ?")
+  const cutsOf = db.prepare(`SELECT COALESCE(SUM(verdict = 'trimmed'), 0) AS trimmed, COALESCE(SUM(verdict = 'rejected'), 0) AS rejected
+                             FROM orders WHERE trader_id = ? AND status <> 'dry_run' AND decided_on >= ?`)
   const costOf = db.prepare(`SELECT COALESCE(SUM(r.cost_micro), 0) AS cost, COALESCE(SUM(r.searches), 0) AS searches FROM runs r JOIN briefing_packs p ON p.id = r.pack_id
                              WHERE r.trader_id = ? AND r.dry_run = 0 AND p.trading_date >= ?`)
   const count = (/** @type {any} */ stmt, /** @type {number} */ id) => /** @type {{ n: number }} */ (stmt.get(id, base)).n
@@ -546,12 +547,14 @@ export function compareTracks(db, a, b, { costs = false } = {}) {
       const last = [...dates].reverse().find((d) => m.has(d))
       const snap = last ? m.get(last) : undefined
       const spend = /** @type {{ cost: number, searches: number }} */ (costOf.get(t.id, base))
+      const cuts = /** @type {{ trimmed: number, rejected: number }} */ (cutsOf.get(t.id, base))
       return {
         line,
         returnPct: lastValue(line),
         cashSharePct: snap && snap.total ? (snap.cash / snap.total) * 100 : null,
         trades: count(tradesOf, t.id),
-        ruleBreaks: count(breaksOf, t.id),
+        trimmed: cuts.trimmed,
+        rejected: cuts.rejected,
         costMicro: spend.cost,
         searches: spend.searches,
         trader: { traderId: t.id, name: t.name, colourSlot: t.colourSlot },
@@ -571,6 +574,7 @@ export function compareTracks(db, a, b, { costs = false } = {}) {
       row: {
         slug: k.slug,
         title: k.title,
+        cadence: k.cadence,
         webSearch: k.web_search,
         briefingPack: k.briefing_pack,
         traders: figures.length,
@@ -580,7 +584,8 @@ export function compareTracks(db, a, b, { costs = false } = {}) {
         worst: ranked.length > 1 ? { ...ranked[ranked.length - 1].trader, returnPct: asReturn(ranked[ranked.length - 1].returnPct) } : null,
         cashSharePct: (() => { const c = mean(figures.map((f) => f.cashSharePct)); return c === null ? null : round2(c) })(),
         trades: figures.reduce((s, f) => s + f.trades, 0),
-        ruleBreaks: figures.reduce((s, f) => s + f.ruleBreaks, 0),
+        trimmed: figures.reduce((s, f) => s + f.trimmed, 0),
+        rejected: figures.reduce((s, f) => s + f.rejected, 0),
         searches: figures.reduce((s, f) => s + f.searches, 0),
         ...(costs ? { costMicro: cost, costPerTraderMicro: figures.length ? Math.round(cost / figures.length) : 0 } : {}),
       },

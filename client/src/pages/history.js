@@ -9,7 +9,7 @@ import { Badges } from '../components/StandingsTable.js'
 import { ValueChart } from '../components/ValueChart.js'
 import { day, dayRange } from '../utils/format.js'
 import { displayName } from '../utils/traders.js'
-import { navigate } from '../utils/nav.js'
+import { navigate, queryParam, setQueryParam } from '../utils/nav.js'
 
 export const meta = { layout: 'app', title: 'History · Market Jury' }
 
@@ -18,7 +18,7 @@ const link = 'inline-flex min-h-11 items-center font-mono text-sm text-brand und
 // History: the whole experiment, newest week first.
 function HistoryPage() {
   useMeta({ title: 'History · Market Jury' })
-  const ui = reactive({ track: 'daily' })
+  const ui = reactive({ track: /^[a-z0-9-]+$/.test(queryParam('track') ?? '') ? String(queryParam('track')) : 'daily' })
   const history = useApi(() => `/api/history?track=${ui.track}`)
   const series = useApi(() => `/api/series?track=${ui.track}`)
 
@@ -29,7 +29,7 @@ function HistoryPage() {
         title: 'History',
         intro: 'The whole experiment, one week at a time. Open a week for its standings and the Columnist\'s report, or tap a day to see every trade and reason from that run.',
       }))}
-      ${TrackPicker({ value: () => ui.track, onPick: (v) => { ui.track = v } })}
+      ${TrackPicker({ value: () => ui.track, onPick: (v) => { ui.track = v; setQueryParam('track', v, 'daily') } })}
       ${Loadable(history, (h) => html`
         <section class="flex flex-col gap-2" aria-labelledby="since">
           <h2 id="since" class="font-display text-2xl font-semibold text-fg">Since day one</h2>

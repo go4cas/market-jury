@@ -199,9 +199,11 @@ function handleNavigate(event) {
   if (!event.canIntercept) return
   // Let hash-only changes pass through without a route update.
   if (event.hashChange) return
-  // Guard-cancel rollback: URL-only correction, the page never changed —
-  // don't re-run guards or resolveRoute (which would remount the page).
-  if (/** @type {{ rollback?: boolean } | undefined} */ (event.info)?.rollback) return
+  // Guard-cancel rollback, or a page keeping its own choice in the query
+  // string: URL-only, the page never changed — don't re-run guards or
+  // resolveRoute (which would remount the page).
+  const info = /** @type {{ rollback?: boolean, urlOnly?: boolean } | undefined} */ (event.info)
+  if (info?.rollback || info?.urlOnly) return
 
   const to = normalizePath(new URL(event.destination.url).pathname)
   const from = routerState.path

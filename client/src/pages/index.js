@@ -10,7 +10,7 @@ import { Term } from '../components/Term.js'
 import { TrackPicker, trackLabel } from '../components/TrackPicker.js'
 import { ValueChart } from '../components/ValueChart.js'
 import { day } from '../utils/format.js'
-import { navigate } from '../utils/nav.js'
+import { navigate, queryParam, setQueryParam } from '../utils/nav.js'
 import { formatClock, formatDateline, NY_TIME_ZONE, viewerTimeZone, zoneLabel } from '../utils/time.js'
 
 export const meta = { layout: 'app', title: 'Market Jury' }
@@ -57,9 +57,13 @@ function OverviewPage() {
   const chartOf = (/** @type {string} */ slug) => (charts[slug] ??= useFetch(`/api/series?track=${encodeURIComponent(slug)}`, { immediate: false }))
   const pickTrack = (/** @type {string} */ t) => {
     ui.track = t
+    setQueryParam('track', t, 'daily')
     const chart = chartOf(t)
     if (!chart.data() && !chart.loading()) chart.refetch()
   }
+  // A link with ?track= reopens on that Track.
+  const linked = queryParam('track') ?? ''
+  if (/^[a-z0-9-]+$/.test(linked) && linked !== 'daily') pickTrack(linked)
 
   return html`
     <div class="flex flex-col gap-7">

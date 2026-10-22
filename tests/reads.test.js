@@ -39,7 +39,7 @@ describe('Gallery reads', () => {
     const { body: c } = await get('/api/compare/tracks?a=daily&b=weekly')
     expect(c.base).toBe('2026-11-23')
     expect(c.lines.map((/** @type {any} */ l) => [l.slug, l.values[0]])).toEqual([['daily', 100], ['weekly', 100]])
-    expect(c.rows[0]).toMatchObject({ slug: 'daily', traders: 4, webSearch: 'off' })
+    expect(c.rows[0]).toMatchObject({ slug: 'daily', cadence: 'daily', traders: 4, webSearch: 'off', trimmed: expect.any(Number), rejected: expect.any(Number) })
     expect(c.rows[0].costMicro).toBeGreaterThan(0)
     // Visitors see everything but the cost, as with the Costs screen.
     db.run('UPDATE settings SET gallery_enabled = 1')

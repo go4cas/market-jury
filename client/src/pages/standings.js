@@ -8,7 +8,7 @@ import { Badges, StandingsTable } from '../components/StandingsTable.js'
 import { Term } from '../components/Term.js'
 import { TrackPicker } from '../components/TrackPicker.js'
 import { day, dayRange, monthName } from '../utils/format.js'
-import { queryParam } from '../utils/nav.js'
+import { queryParam, setQueryParam } from '../utils/nav.js'
 
 export const meta = { layout: 'app', title: 'Standings · Market Jury' }
 
@@ -34,7 +34,7 @@ function StandingsPage() {
         intro: html`Who is ahead over a day, a week, a month or since the start. Each row also shows how the Trader got there: its ${Term('worst drop')}, how much it keeps in ${Term('cash')}, and how often it traded or broke a rule.`,
       })}
       <div class="flex flex-col gap-3">
-        ${TrackPicker({ value: () => ui.track, onPick: (v) => { ui.track = v } })}
+        ${TrackPicker({ value: () => ui.track, onPick: (v) => { ui.track = v; setQueryParam('track', v, 'daily') } })}
         ${Segmented({ label: 'Period', options: PERIODS, value: () => ui.kind, onPick: (v) => { ui.kind = v; ui.end = '' } })}
       </div>
       ${Loadable(request, (s) => html`
