@@ -5,6 +5,7 @@ import { authRoutes, isTradeMaster } from './auth.js'
 import { config } from './config.js'
 import { json, error, withSecurityHeaders } from './http.js'
 import { readRoutes } from './reads.js'
+import { reviewRoutes } from './review.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 
@@ -17,8 +18,9 @@ import { readRoutes } from './reads.js'
  * @param {string} options.clientDir folder holding the built client (index.html)
  * @param {() => number} [options.now]
  * @param {import('../jobs/schedule.js').StepContext} [options.steps] what the scheduler and dry run use (tests pass fakes)
+ * @param {string} [options.reviewToken] opens /api/review/export (default REVIEW_TOKEN; unset keeps it shut)
  */
-export function startServer({ db, port, clientDir, now, steps }) {
+export function startServer({ db, port, clientDir, now, steps, reviewToken = config.reviewToken }) {
   const root = resolve(clientDir)
   const context = steps ?? { db, now: () => new Date(now ? now() : Date.now()), alpaca: createAlpaca({ ...config.alpaca, now: () => new Date(now ? now() : Date.now()) }) }
 
@@ -40,6 +42,7 @@ export function startServer({ db, port, clientDir, now, steps }) {
       ...authRoutes(db, { now }),
       ...adminRoutes(context),
       ...readRoutes(context),
+      ...reviewRoutes(db, { token: reviewToken }),
 
       '/api/*': () => error(404, 'There is nothing at this address.'),
     },

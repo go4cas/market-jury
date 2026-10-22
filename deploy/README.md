@@ -122,6 +122,19 @@ mj run models:check
 
 It should end with "Every model answered". A FAIL line names the key or model version to fix.
 
+### 8b. Weekly review export (optional)
+
+The weekly platform review reads the trading record from `/api/review/export`, which stays shut
+(404) until a token is set. On the server, make a token:
+
+```sh
+openssl rand -hex 32
+```
+
+Then `sudo nano /etc/market-jury/env`, add a line `REVIEW_TOKEN=` followed by that token, and
+`sudo systemctl restart market-jury`. Give the same token to the review's cloud environment as an
+environment variable. Never paste it into a chat. To shut the export again, delete the line and restart.
+
 ### 9. Before the first live run
 
 Open the app's address and log in as the Trade Master. On **Settings**:
