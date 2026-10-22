@@ -224,7 +224,9 @@ describe('the Market Columnist', () => {
     const record = JSON.parse(mock.calls[0].prompt[1].content[0].text.replace(/^[\s\S]*?<record[^>]*>\n/, '').replace(/\n<\/record>$/, ''))
     expect(record.facts.summary).toContain('1 of 1 AI Traders decided on 2026-11-03')
     expect(record.facts.summary).toContain('The Index')
-    expect(record.market).toEqual({ rose: 3, fell: 2, unchanged: 0, spy: { close: 600 } })
+    expect(record.market).toEqual({ rose: 3, fell: 2, unchanged: 0, spy_fund_price: { close: 600 } })
+    // SPY's price is the fund's, never the S&P 500 index level.
+    expect(record.facts.summary).toContain('SPY (the fund, not the S&P 500 index level) closed at $600 on')
     expect(record.platform_changes).toEqual([])
     const claude = record.traders.find((/** @type {any} */ t) => t.trader === 'Claude daily')
     expect(claude).toHaveProperty('period_change_pct')
