@@ -36,4 +36,27 @@ describe('choosing headlines for a pack', () => {
     expect(picked.filter((h) => h.tickers.includes('TSLA'))).toHaveLength(3)
     expect(picked).toContainEqual(other)
   })
+
+  test('a quiet night and a busy last hour: unused picks go to the other slices in turn, not to the newest', () => {
+    const lastHour = Array.from({ length: 30 }, (_, i) => item(new Date(Date.parse('2026-11-24T20:59:00Z') - i * 60_000).toISOString(), [`L${i}`]))
+    const earlier = [
+      item('2026-11-24T02:00:00Z', ['N1']), item('2026-11-24T09:00:00Z', ['N2']),
+      item('2026-11-24T15:00:00Z', ['A1']), item('2026-11-24T15:30:00Z', ['A2']), item('2026-11-24T16:00:00Z', ['A3']),
+      item('2026-11-24T17:00:00Z', ['B1']), item('2026-11-24T17:30:00Z', ['B2']), item('2026-11-24T18:00:00Z', ['B3']),
+    ]
+    // Pre-open, then the session (14:30 to 21:00 UTC) in three parts.
+    const cuts = [new Date('2026-11-24T14:30:00Z'), new Date('2026-11-24T16:40:00Z'), new Date('2026-11-24T18:50:00Z')]
+    const picked = pickHeadlines([...lastHour, ...earlier], { after, until, limit: 12, cuts, perTicker: 3 })
+    expect(picked).toHaveLength(12)
+    for (const h of earlier) expect(picked).toContainEqual(h)
+    expect(picked.filter((h) => h.publishedAt >= '2026-11-24T20:00:00Z')).toHaveLength(4)
+  })
+
+  test('caps analyst rating notes on menu stocks', () => {
+    const notes = Array.from({ length: 6 }, (_, i) => item(new Date(Date.parse('2026-11-24T20:00:00Z') - i * 60_000).toISOString(), [`R${i}`], `Bank maintains Buy on R${i}, raises price target`))
+    const news = item('2026-11-24T12:00:00Z', ['AAPL'], 'Apple opens a new plant')
+    const picked = pickHeadlines([...notes, news], { after, until, limit: 10, slices: 1, perTicker: 3, ratingNotes: 2 })
+    expect(picked.filter((h) => h.headline.includes('price target'))).toHaveLength(2)
+    expect(picked).toContainEqual(news)
+  })
 })
