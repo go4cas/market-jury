@@ -7,6 +7,7 @@ import { closeOn, positionsOf, valuePortfolio, cashOf } from '../core/portfolio.
 import { positionsAsOf } from '../core/books.js'
 import { badgesFor, periodStart, standings } from '../core/standings.js'
 import { platformChanges } from '../core/changes.js'
+import { tracks } from '../core/tracks.js'
 import { dayNumber, PAPER_PHASE_DAYS } from '../jobs/experiment.js'
 
 export { dayNumber }
@@ -32,17 +33,31 @@ export function readRoutes({ db, now }) {
     '/api/overview': {
       GET: open(() => {
         const latest = latestDate(db)
+        const all = publicTracks(db)
         return {
           status: status(db, now()),
           movers: latest ? movers(db, latest) : [],
-          standings: latest ? { daily: standings(db, { track: 'daily', kind: 'all', end: latest }), weekly: standings(db, { track: 'weekly', kind: 'all', end: latest }) } : { daily: [], weekly: [] },
+          tracks: all,
+          standings: Object.fromEntries(all.map((k) => [k.slug, latest ? standings(db, { track: k.slug, kind: 'all', end: latest }) : []])),
           recap: db.query("SELECT kind, period_date AS date, headline, body FROM columnist_posts WHERE kind = 'daily' ORDER BY period_date DESC LIMIT 1").get() ?? null,
           hero: hero(db, latest),
         }
       }),
     },
 
-    '/api/series': { GET: open((_req, url) => series(db, track(url))) },
+    '/api/series': { GET: open((_req, url) => series(db, track(db, url))) },
+
+    '/api/tracks': { GET: open(() => ({ tracks: publicTracks(db) })) },
+    '/api/compare/tracks': {
+      GET: open((req, url) => {
+        const known = publicTracks(db).map((k) => k.slug)
+        const a = url.searchParams.get('a') ?? ''
+        const b = url.searchParams.get('b') ?? ''
+        if (!known.includes(a) || !known.includes(b)) return error(404, 'Pick two tracks from the list.')
+        // What the models cost is for the Trade Master, like the Costs screen.
+        return compareTracks(db, a, b, { costs: isTradeMaster(db, req) })
+      }),
+    },
 
     '/api/standings': {
       GET: open((_req, url) => {
@@ -51,13 +66,14 @@ export function readRoutes({ db, now }) {
         const kind = /** @type {import('../core/standings.js').PeriodKind} */ (['day', 'week', 'month', 'all'].includes(kindParam ?? '') ? kindParam : 'week')
         const end = dateParam(url.searchParams.get('end')) ?? latest
         const ends = periodEnds(db, latest)
-        if (!end) return { track: track(url), kind, end: null, start: null, rows: [], badges: [], periods: ends }
+        const slug = track(db, url)
+        if (!end) return { track: slug, kind, end: null, start: null, rows: [], badges: [], periods: ends }
         return {
-          track: track(url),
+          track: slug,
           kind,
           end,
           start: periodStart(db, kind, end),
-          rows: standings(db, { track: track(url), kind, end }),
+          rows: standings(db, { track: slug, kind, end }),
           badges: kind === 'week' || kind === 'month' ? badgesFor(db, kind, end) : [],
           periods: ends,
         }
@@ -81,13 +97,15 @@ export function readRoutes({ db, now }) {
       }),
     },
 
-    '/api/history': { GET: open((_req, url) => history(db, track(url))) },
+    '/api/history': { GET: open((_req, url) => history(db, track(db, url))) },
 
     '/api/traders': {
       GET: open(() => ({
         traders: db.query(`SELECT t.id, t.name, t.kind, t.cadence, t.colour_slot AS colourSlot, t.status, t.started_on AS startedOn, t.retired_on AS retiredOn,
-                             m.provider, m.model_version AS modelVersion, m.effort
-                           FROM traders t LEFT JOIN models m ON m.id = t.model_id WHERE t.started_on IS NOT NULL ORDER BY t.kind = 'benchmark', t.id`).all(),
+                             m.provider, m.model_version AS modelVersion, m.effort, k.slug AS track, k.title AS trackTitle
+                           FROM traders t LEFT JOIN models m ON m.id = t.model_id LEFT JOIN tracks k ON k.id = t.track_id
+                           WHERE t.started_on IS NOT NULL ORDER BY t.kind = 'benchmark', t.track_id, t.id`).all(),
+        tracks: publicTracks(db),
       })),
     },
     '/api/traders/:id': {
@@ -128,8 +146,35 @@ export function readRoutes({ db, now }) {
 /** @param {Database} db */
 const galleryOpen = (db) => /** @type {{ g: number }} */ (db.query('SELECT gallery_enabled AS g FROM settings WHERE id = 1').get()).g === 1
 
-/** @param {URL} url */
-const track = (url) => /** @type {'daily' | 'weekly'} */ (url.searchParams.get('track') === 'weekly' ? 'weekly' : 'daily')
+/**
+ * The Track asked for by its slug; the daily one when none (or an unknown one) is asked for.
+ * @param {Database} db
+ * @param {URL} url
+ */
+const track = (db, url) => {
+  const slug = url.searchParams.get('track') ?? 'daily'
+  return db.query('SELECT 1 FROM tracks WHERE slug = ?').get(slug) ? slug : 'daily'
+}
+
+/**
+ * The Tracks that have started (or all of them before the start), with what
+ * their Traders get, for track pickers and labels.
+ * @param {Database} db
+ */
+export function publicTracks(db) {
+  const started = /** @type {{ s: string | null }} */ (db.query('SELECT start_date AS s FROM settings WHERE id = 1').get()).s
+  const count = db.prepare("SELECT COUNT(*) AS n FROM traders WHERE track_id = ? AND kind = 'ai' AND status <> 'retired'")
+  return tracks(db).filter((k) => !started || k.started_on).map((k) => ({
+    slug: k.slug,
+    title: k.title,
+    cadence: k.cadence,
+    briefingPack: k.briefing_pack,
+    webSearch: k.web_search,
+    searchesPerRun: k.searches_per_run,
+    startedOn: k.started_on,
+    traders: /** @type {{ n: number }} */ (count.get(k.id)).n,
+  }))
+}
 
 /** @param {string | null} s */
 const dateParam = (s) => (s && /^\d{4}-\d{2}-\d{2}$/.test(s) ? s : null)
@@ -210,7 +255,7 @@ function hero(db, latest) {
   const valueOn = db.prepare('SELECT total_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?')
   const daily = /** @type {Array<{ id: number, name: string, kind: string, colourSlot: number | null }>} */ (
     db.query(`SELECT id, name, kind, colour_slot AS colourSlot FROM traders
-              WHERE status <> 'retired' AND (kind = 'benchmark' OR cadence = 'daily') ORDER BY kind = 'benchmark', id`).all()
+              WHERE status <> 'retired' AND (kind = 'benchmark' OR track_id = (SELECT id FROM tracks WHERE slug = 'daily')) ORDER BY kind = 'benchmark', id`).all()
   )
   return {
     traders: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM traders WHERE kind = 'ai' AND status <> 'retired'").get()).n,
@@ -249,12 +294,12 @@ function movers(db, date) {
 /**
  * Every Trader's value at each close, for the value chart.
  * @param {Database} db
- * @param {'daily' | 'weekly'} trackName
+ * @param {string} trackName the Track's slug
  */
 function series(db, trackName) {
   const dates = db.query('SELECT DISTINCT trading_date FROM snapshots ORDER BY trading_date').values().map(([d]) => String(d))
   const traders = /** @type {Array<{ id: number, name: string, kind: string, colourSlot: number | null }>} */ (
-    db.query("SELECT id, name, kind, colour_slot AS colourSlot FROM traders WHERE started_on IS NOT NULL AND (kind = 'benchmark' OR cadence = ?) ORDER BY kind = 'benchmark', id").all(trackName)
+    db.query("SELECT id, name, kind, colour_slot AS colourSlot FROM traders WHERE started_on IS NOT NULL AND (kind = 'benchmark' OR track_id = (SELECT id FROM tracks WHERE slug = ?)) ORDER BY kind = 'benchmark', id").all(trackName)
   )
   const at = new Map(dates.map((d, i) => [d, i]))
   return {
@@ -307,9 +352,9 @@ function day(db, date, tradeMaster) {
   const fillDate = nextTradingDay(db, date)
   const weekly = isLastTradingDayOfWeek(db, date)
 
-  const traders = /** @type {Array<{ id: number, name: string, cadence: string, colourSlot: number | null }>} */ (
-    db.query(`SELECT id, name, cadence, colour_slot AS colourSlot FROM traders
-              WHERE kind = 'ai' AND started_on <= ?1 AND (retired_on IS NULL OR retired_on >= ?1) AND (cadence = 'daily' OR ?2) ORDER BY cadence, id`).all(date, weekly ? 1 : 0)
+  const traders = /** @type {Array<{ id: number, name: string, cadence: string, colourSlot: number | null, track: string | null, trackTitle: string | null }>} */ (
+    db.query(`SELECT t.id, t.name, t.cadence, t.colour_slot AS colourSlot, k.slug AS track, k.title AS trackTitle FROM traders t LEFT JOIN tracks k ON k.id = t.track_id
+              WHERE t.kind = 'ai' AND t.started_on <= ?1 AND (t.retired_on IS NULL OR t.retired_on >= ?1) AND (t.cadence = 'daily' OR ?2) ORDER BY t.cadence, t.track_id, t.id`).all(date, weekly ? 1 : 0)
   )
   const decisionOf = db.prepare(`SELECT d.market_view AS marketView, d.no_trades_reason AS noTradesReason, d.run_id AS runId FROM decisions d JOIN runs r ON r.id = d.run_id
                                  WHERE d.trader_id = ? AND d.trading_date = ? AND r.dry_run = 0`)
@@ -335,6 +380,8 @@ function day(db, date, tradeMaster) {
       traderId: t.id,
       name: t.name,
       cadence: t.cadence,
+      track: t.track,
+      trackTitle: t.trackTitle,
       colourSlot: t.colourSlot,
       decided: d !== null,
       marketView: d?.marketView ?? null,
@@ -350,15 +397,15 @@ function day(db, date, tradeMaster) {
 /**
  * The whole experiment, a week at a time, newest first: the History screen.
  * @param {Database} db
- * @param {'daily' | 'weekly'} trackName
+ * @param {string} trackName the Track's slug
  */
 function history(db, trackName) {
   const { start_date: start } = /** @type {{ start_date: string | null }} */ (db.query('SELECT start_date FROM settings WHERE id = 1').get())
   const latest = latestDate(db)
   // Trades and trims are the chosen track's AI Traders' own; missed runs are the whole experiment's.
-  const tradesOn = db.prepare(`SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND t.cadence = ? AND f.trading_date = ?`)
+  const tradesOn = db.prepare(`SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND t.track_id = (SELECT id FROM tracks WHERE slug = ?) AND f.trading_date = ?`)
   const trimsBetween = db.prepare(`SELECT COUNT(*) AS n FROM orders o JOIN traders t ON t.id = o.trader_id
-                                   WHERE t.kind = 'ai' AND t.cadence = ? AND o.verdict = 'trimmed' AND o.status <> 'dry_run' AND o.decided_on BETWEEN ? AND ?`)
+                                   WHERE t.kind = 'ai' AND t.track_id = (SELECT id FROM tracks WHERE slug = ?) AND o.verdict = 'trimmed' AND o.status <> 'dry_run' AND o.decided_on BETWEEN ? AND ?`)
   const missesBetween = db.prepare("SELECT COUNT(*) AS n FROM step_runs WHERE status = 'failed' AND trading_date BETWEEN ? AND ?")
   const count = (/** @type {any} */ stmt, /** @type {string[]} */ ...args) => /** @type {{ n: number }} */ (stmt.get(...args)).n
 
@@ -396,7 +443,7 @@ function history(db, trackName) {
     day: dayNumber(db, latest),
     totals: {
       tradingDays: dayNumber(db, latest),
-      trades: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND t.cadence = ?").get(trackName)).n,
+      trades: /** @type {{ n: number }} */ (db.query("SELECT COUNT(*) AS n FROM fills f JOIN traders t ON t.id = f.trader_id WHERE t.kind = 'ai' AND t.track_id = (SELECT id FROM tracks WHERE slug = ?)").get(trackName)).n,
       trims: count(trimsBetween, trackName, start, latest),
       missedRuns: count(missesBetween, start, latest),
     },
@@ -414,8 +461,8 @@ export const TRADES_SHOWN = 200
  */
 function trader(db, id) {
   const t = /** @type {any} */ (db.query(`SELECT t.id, t.name, t.kind, t.cadence, t.colour_slot AS colourSlot, t.status, t.started_on AS startedOn, t.retired_on AS retiredOn,
-                                            m.provider, m.model_version AS modelVersion, m.effort
-                                          FROM traders t LEFT JOIN models m ON m.id = t.model_id WHERE t.id = ? AND t.started_on IS NOT NULL`).get(id))
+                                            m.provider, m.model_version AS modelVersion, m.effort, k.slug AS track, k.title AS trackTitle, k.web_search AS webSearch, k.briefing_pack AS briefingPack
+                                          FROM traders t LEFT JOIN models m ON m.id = t.model_id LEFT JOIN tracks k ON k.id = t.track_id WHERE t.id = ? AND t.started_on IS NOT NULL`).get(id))
   if (!t) return null
   const latest = latestDate(db)
   const positions = latest ? positionsAsOf(db, id, latest) : positionsOf(db, id)
@@ -450,3 +497,101 @@ function trader(db, id) {
   }
 }
 
+
+/**
+ * Two Tracks side by side from the day both had started: each Track's line is
+ * the average of its Traders' values, and every line (The Index too) is set
+ * to 100 at that day's close, so neither Track gets credit for the weeks the
+ * other hadn't started. The Compare screen's "Track vs Track".
+ * @param {Database} db
+ * @param {string} a a Track's slug
+ * @param {string} b another (or the same) Track's slug
+ * @param {{ costs?: boolean }} [options] costs: include what each Track's model calls cost
+ */
+export function compareTracks(db, a, b, { costs = false } = {}) {
+  const lastValue = (/** @type {(number | null)[]} */ xs) => [...xs].reverse().find((v) => v !== null) ?? null
+  const pick = (/** @type {string} */ slug) => /** @type {import('../core/tracks.js').Track} */ (tracks(db).find((k) => k.slug === slug))
+  const both = [pick(a), pick(b)]
+  const latest = latestDate(db)
+  const starts = both.map((k) => k.started_on)
+  const base = starts.every(Boolean) ? /** @type {string} */ (starts.reduce((x, y) => ((y ?? '') > (x ?? '') ? y : x))) : null
+  const empty = { base, latest, dates: [], lines: [], index: null, rows: both.map((k) => ({ slug: k.slug, title: k.title, webSearch: k.web_search, briefingPack: k.briefing_pack, traders: 0 })) }
+  if (!base || !latest || base > latest) return empty
+  const dates = db.query('SELECT DISTINCT trading_date FROM snapshots WHERE trading_date >= ? ORDER BY trading_date').values(base).map(([d]) => String(d))
+  if (!dates.length) return empty
+  const valuesOf = db.prepare('SELECT trading_date, total_micro, cash_micro FROM snapshots WHERE trader_id = ? AND trading_date >= ? ORDER BY trading_date')
+  /** @param {number} id @returns {Map<string, { total: number, cash: number }>} */
+  const snapshotsOf = (id) => new Map(/** @type {Array<{ trading_date: string, total_micro: number, cash_micro: number }>} */ (valuesOf.all(id, base)).map((r) => [r.trading_date, { total: r.total_micro, cash: r.cash_micro }]))
+  /** Each date's value as a share of the first one, times 100. @param {Map<string, { total: number }>} m */
+  const rebased = (m) => {
+    const first = dates.map((d) => m.get(d)?.total).find((v) => v !== undefined)
+    return dates.map((d) => (first && m.has(d) ? (/** @type {{ total: number }} */ (m.get(d)).total / first) * 100 : null))
+  }
+  const round2 = (/** @type {number} */ n) => Math.round(n * 100) / 100 + 0
+  const index = /** @type {{ id: number } | null} */ (db.query("SELECT id FROM traders WHERE kind = 'benchmark' ORDER BY id LIMIT 1").get())
+  const indexLine = index ? rebased(snapshotsOf(index.id)) : null
+  const indexReturn = indexLine ? lastValue(indexLine) : null
+  const tradesOf = db.prepare('SELECT COUNT(*) AS n FROM fills WHERE trader_id = ? AND trading_date > ?')
+  const breaksOf = db.prepare("SELECT COUNT(*) AS n FROM orders WHERE trader_id = ? AND verdict IN ('trimmed', 'rejected') AND status <> 'dry_run' AND decided_on >= ?")
+  const costOf = db.prepare(`SELECT COALESCE(SUM(r.cost_micro), 0) AS cost, COALESCE(SUM(r.searches), 0) AS searches FROM runs r JOIN briefing_packs p ON p.id = r.pack_id
+                             WHERE r.trader_id = ? AND r.dry_run = 0 AND p.trading_date >= ?`)
+  const count = (/** @type {any} */ stmt, /** @type {number} */ id) => /** @type {{ n: number }} */ (stmt.get(id, base)).n
+
+  const per = both.map((k) => {
+    const traders = /** @type {Array<{ id: number, name: string, colourSlot: number | null }>} */ (
+      db.query("SELECT id, name, colour_slot AS colourSlot FROM traders WHERE kind = 'ai' AND track_id = ? AND started_on IS NOT NULL ORDER BY id").all(k.id))
+    const figures = traders.map((t) => {
+      const m = snapshotsOf(t.id)
+      const line = rebased(m)
+      const last = [...dates].reverse().find((d) => m.has(d))
+      const snap = last ? m.get(last) : undefined
+      const spend = /** @type {{ cost: number, searches: number }} */ (costOf.get(t.id, base))
+      return {
+        line,
+        returnPct: lastValue(line),
+        cashSharePct: snap && snap.total ? (snap.cash / snap.total) * 100 : null,
+        trades: count(tradesOf, t.id),
+        ruleBreaks: count(breaksOf, t.id),
+        costMicro: spend.cost,
+        searches: spend.searches,
+        trader: { traderId: t.id, name: t.name, colourSlot: t.colourSlot },
+      }
+    })
+    const mean = (/** @type {(number | null)[]} */ xs) => {
+      const ok = /** @type {number[]} */ (xs.filter((x) => x !== null))
+      return ok.length ? ok.reduce((s, x) => s + x, 0) / ok.length : null
+    }
+    const line = dates.map((_, i) => mean(figures.map((f) => f.line[i])))
+    const ranked = figures.filter((f) => f.returnPct !== null).sort((x, y) => /** @type {number} */ (y.returnPct) - /** @type {number} */ (x.returnPct))
+    const asReturn = (/** @type {number | null | undefined} */ v) => (v === null || v === undefined ? null : round2(v - 100))
+    const avg = mean(figures.map((f) => f.returnPct))
+    const cost = figures.reduce((s, f) => s + f.costMicro, 0)
+    return {
+      line,
+      row: {
+        slug: k.slug,
+        title: k.title,
+        webSearch: k.web_search,
+        briefingPack: k.briefing_pack,
+        traders: figures.length,
+        returnPct: asReturn(avg),
+        vsIndexPct: avg === null || indexReturn === null ? null : round2(avg - indexReturn),
+        best: ranked[0] ? { ...ranked[0].trader, returnPct: asReturn(ranked[0].returnPct) } : null,
+        worst: ranked.length > 1 ? { ...ranked[ranked.length - 1].trader, returnPct: asReturn(ranked[ranked.length - 1].returnPct) } : null,
+        cashSharePct: (() => { const c = mean(figures.map((f) => f.cashSharePct)); return c === null ? null : round2(c) })(),
+        trades: figures.reduce((s, f) => s + f.trades, 0),
+        ruleBreaks: figures.reduce((s, f) => s + f.ruleBreaks, 0),
+        searches: figures.reduce((s, f) => s + f.searches, 0),
+        ...(costs ? { costMicro: cost, costPerTraderMicro: figures.length ? Math.round(cost / figures.length) : 0 } : {}),
+      },
+    }
+  })
+  return {
+    base,
+    latest,
+    dates,
+    lines: per.map((p, i) => ({ slug: both[i].slug, title: both[i].title, values: p.line.map((v) => (v === null ? null : round2(v))) })),
+    index: indexLine ? { values: indexLine.map((v) => (v === null ? null : round2(v))), returnPct: indexReturn === null ? null : round2(indexReturn - 100) } : null,
+    rows: per.map((p) => p.row),
+  }
+}

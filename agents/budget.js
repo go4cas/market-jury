@@ -1,7 +1,7 @@
 // The budget guard (PRD): every run's cost is recorded; the month's spend so
 // far is projected to the month's end. At 90% of the ceiling the Trade Master
-// is warned; at 100% the weekly Traders and the Columnist's daily recap pause,
-// while the daily Traders keep running.
+// is warned; at 100% the Traders who search the web, the weekly Traders and the
+// Columnist's daily recap pause, while the other daily Traders keep running.
 
 /** @typedef {import('bun:sqlite').Database} Database */
 
@@ -30,8 +30,10 @@ export function budget(db, now) {
 }
 
 /**
- * May this kind of run go ahead, given the budget?
+ * May this kind of run go ahead, given the budget? A Trader in a Track with
+ * web search costs the most, so it pauses first.
  * @param {Budget} b
  * @param {'daily trader' | 'weekly trader' | 'daily recap' | 'weekly report'} kind
+ * @param {{ searches?: boolean }} [options] searches: the Trader's Track allows web search
  */
-export const mayRun = (b, kind) => b.level !== 'over' || kind === 'daily trader' || kind === 'weekly report'
+export const mayRun = (b, kind, { searches = false } = {}) => b.level !== 'over' || (!searches && (kind === 'daily trader' || kind === 'weekly report'))

@@ -1,5 +1,5 @@
-// Standings and badges. A standings table ranks one track (the daily or the
-// weekly Traders, plus The Index) by return over a period: a day, a week, a
+// Standings and badges. A standings table ranks one track (its Traders, one
+// per model, plus The Index) by return over a period: a day, a week, a
 // month, or since the start. Each row also carries behaviour (worst drop, cash
 // share, trades, rule breaks) so a lucky gambler can't hide behind its return.
 //
@@ -155,12 +155,12 @@ function indexReturnFor(db, index, t, baseDate) {
 /**
  * The standings table for one track over a period.
  * @param {Database} db
- * @param {{ track: 'daily' | 'weekly', kind: PeriodKind, end: string }} options
+ * @param {{ track: string, kind: PeriodKind, end: string }} options track: the Track's slug
  * @returns {StandingRow[]}
  */
 export function standings(db, { track, kind, end }) {
   const start = periodStart(db, kind, end)
-  const traders = tradersWhere(db, "(t.kind = 'benchmark' OR t.cadence = ?) AND t.started_on <= ?", [track, end])
+  const traders = tradersWhere(db, "(t.kind = 'benchmark' OR t.track_id = (SELECT id FROM tracks WHERE slug = ?)) AND t.started_on <= ?", [track, end])
   const rows = traders.flatMap((t) => {
     const f = periodFigures(db, t, start, end)
     return f ? [{ t, f }] : []

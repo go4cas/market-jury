@@ -1,11 +1,14 @@
 // How a Trader looks everywhere: its fixed colour, its two-letter mark, and
-// its name split into model and cadence ("Claude · Daily").
+// its name split into model and track ("Claude · Daily", "Claude · Weekly research").
 
 /**
  * @typedef {object} TraderLike
  * @property {string} name
  * @property {string} [kind] 'ai' or 'benchmark'
  * @property {number | null} [colourSlot]
+ * @property {string} [colour] a CSS colour for a line that is not one Trader (a Track's average in Compare)
+ * @property {'solid' | 'dotted' | 'dashdot'} [style] a chart line's style (see lineStyleOf)
+ * @property {boolean} [dotted] same as style 'dotted'
  */
 
 /**
@@ -32,16 +35,25 @@ export function markOf(t) {
 }
 
 /**
- * "Claude" from "Claude daily".
+ * "Claude" from "Claude daily" or "Claude weekly research".
  * @param {string} name
  */
-export const modelName = (name) => name.replace(/\s+(daily|weekly)$/i, '')
+export const modelName = (name) => name.replace(/\s+(daily|weekly)(\s.*)?$/i, '')
 
 /**
- * "Claude · Daily" from "Claude daily"; The Index stays as it is.
+ * "Claude · Daily" from "Claude daily", "Claude · Weekly research" from
+ * "Claude weekly research"; The Index stays as it is.
  * @param {string} name
  */
 export function displayName(name) {
-  const m = name.match(/^(.*)\s+(daily|weekly)$/i)
+  const m = name.match(/^(.*?)\s+((?:daily|weekly)(?:\s.*)?)$/i)
   return m ? `${m[1]} · ${m[2][0].toUpperCase()}${m[2].slice(1)}` : name
 }
+
+/**
+ * How a Track's line is drawn where several Tracks of one model meet (Compare):
+ * the first solid, the second dotted, later ones dash-dot. The Index alone is dashed.
+ * @param {number} position the Track's place in the list, from 0
+ * @returns {'solid' | 'dotted' | 'dashdot'}
+ */
+export const lineStyleOf = (position) => (position <= 0 ? 'solid' : position === 1 ? 'dotted' : 'dashdot')

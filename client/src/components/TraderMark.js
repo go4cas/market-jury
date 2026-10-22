@@ -24,11 +24,16 @@ export function TraderName(t, options = {}) {
 }
 
 /**
- * A short line swatch for chart legends: solid for a Trader, dashed for The Index.
+ * A short line swatch for chart legends: solid for a Trader (dotted or dash-dot for
+ * a model's later Tracks in Compare), dashed for The Index.
  * @param {import('../utils/traders.js').TraderLike} t
  */
 export function Swatch(t) {
-  return t.kind === 'benchmark'
-    ? html`<span aria-hidden="true" class="inline-block w-4" style="${`border-top: 2px dashed ${colourOf(t)}`}"></span>`
-    : html`<span aria-hidden="true" class="inline-block h-[3px] w-4" style="${`background: ${colourOf(t)}`}"></span>`
+  if (t.kind === 'benchmark') return html`<span aria-hidden="true" class="inline-block w-4" style="${`border-top: 2px dashed ${colourOf(t)}`}"></span>`
+  // A Track's line in Compare: its own colour, drawn in its line style.
+  const colour = t.colour ?? colourOf(t)
+  const style = t.style ?? (t.dotted ? 'dotted' : 'solid')
+  return style === 'solid'
+    ? html`<span aria-hidden="true" class="inline-block h-[3px] w-4" style="${`background: ${colour}`}"></span>`
+    : html`<span aria-hidden="true" class="inline-block w-4" style="${`border-top: 3px ${style === 'dotted' ? 'dotted' : 'dashed'} ${colour}`}"></span>`
 }

@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader.js'
 import { Segmented } from '../components/Segmented.js'
 import { Badges, StandingsTable } from '../components/StandingsTable.js'
 import { Term } from '../components/Term.js'
+import { TrackPicker } from '../components/TrackPicker.js'
 import { day, dayRange, monthName } from '../utils/format.js'
 import { queryParam } from '../utils/nav.js'
 
@@ -19,7 +20,7 @@ function StandingsPage() {
   useMeta({ title: 'Standings · Market Jury' })
   const kind = queryParam('kind') ?? ''
   const ui = reactive({
-    track: queryParam('track') === 'weekly' ? 'weekly' : 'daily',
+    track: /^[a-z0-9-]+$/.test(queryParam('track') ?? '') ? String(queryParam('track')) : 'daily',
     kind: PERIODS.some((p) => p.value === kind) ? kind : 'week',
     end: /^\d{4}-\d{2}-\d{2}$/.test(queryParam('end') ?? '') ? String(queryParam('end')) : '',
   })
@@ -33,7 +34,7 @@ function StandingsPage() {
         intro: html`Who is ahead over a day, a week, a month or since the start. Each row also shows how the Trader got there: its ${Term('worst drop')}, how much it keeps in ${Term('cash')}, and how often it traded or broke a rule.`,
       })}
       <div class="flex flex-col gap-3">
-        ${Segmented({ label: 'Track', options: [{ value: 'daily', label: 'Daily track' }, { value: 'weekly', label: 'Weekly track' }], value: () => ui.track, onPick: (v) => { ui.track = v } })}
+        ${TrackPicker({ value: () => ui.track, onPick: (v) => { ui.track = v } })}
         ${Segmented({ label: 'Period', options: PERIODS, value: () => ui.kind, onPick: (v) => { ui.kind = v; ui.end = '' } })}
       </div>
       ${Loadable(request, (s) => html`

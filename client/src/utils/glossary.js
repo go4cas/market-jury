@@ -21,6 +21,7 @@ export const GLOSSARY = /** @type {const} */ ({
   'market view': 'The Trader\'s own summary of what the market did and what it thinks next, written with each decision.',
   journal: 'Private notes a Trader keeps for itself between runs. It reads them back before its next decision.',
   turnover: 'How much a Trader bought and sold in a day, as a share of its portfolio. High turnover means lots of trading.',
+  track: 'A group of Traders, one per model, who all play by the same conditions: how often they decide, how much of the briefing pack they get, and whether they may search the web.',
   'daily track': 'The Traders that decide every evening.',
   'weekly track': 'The Traders that decide once a week, after Friday\'s close. Same models, less trading.',
 })

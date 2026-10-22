@@ -4,7 +4,7 @@ import { useApi } from '../composables/useApi.js'
 import { Delta } from '../components/Delta.js'
 import { fresh, Loadable } from '../components/Loadable.js'
 import { PageHeader } from '../components/PageHeader.js'
-import { Segmented } from '../components/Segmented.js'
+import { TrackPicker } from '../components/TrackPicker.js'
 import { Badges } from '../components/StandingsTable.js'
 import { ValueChart } from '../components/ValueChart.js'
 import { day, dayRange } from '../utils/format.js'
@@ -29,11 +29,11 @@ function HistoryPage() {
         title: 'History',
         intro: 'The whole experiment, one week at a time. Open a week for its standings and the Columnist\'s report, or tap a day to see every trade and reason from that run.',
       }))}
-      ${Segmented({ label: 'Track', options: [{ value: 'daily', label: 'Daily track' }, { value: 'weekly', label: 'Weekly track' }], value: () => ui.track, onPick: (v) => { ui.track = v } })}
+      ${TrackPicker({ value: () => ui.track, onPick: (v) => { ui.track = v } })}
       ${Loadable(history, (h) => html`
         <section class="flex flex-col gap-2" aria-labelledby="since">
           <h2 id="since" class="font-display text-2xl font-semibold text-fg">Since day one</h2>
-          ${Loadable(series, (s) => ValueChart({ dates: s.dates, lines: s.series, label: `${s.track === 'weekly' ? 'Weekly' : 'Daily'} track since day one` }))}
+          ${Loadable(series, (s) => ValueChart({ dates: s.dates, lines: s.series, label: 'This track since day one' }))}
           <p class="flex flex-wrap gap-x-4 font-mono text-[13px] text-fg-soft"><span>${h.totals.tradingDays} trading days</span><span>${h.totals.trades} trades</span><span>${h.totals.trims} trims</span><span>${h.totals.missedRuns} missed runs</span></p>
         </section>
         <h2 class="mt-2 font-display text-2xl font-semibold text-fg">Week by week</h2>

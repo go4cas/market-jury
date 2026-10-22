@@ -4,6 +4,7 @@
 // (counted as one of those retries). The answer is parsed, never executed.
 import { APICallError, generateText, isStepCount, NoObjectGeneratedError, Output } from 'ai'
 import { costOf, reasoningFor } from './models.js'
+import { searchesIn } from './search.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
 /** @typedef {import('ai').ModelMessage} ModelMessage */
@@ -49,6 +50,7 @@ export function retryDelay(e, attempt) {
  * @property {import('zod').ZodType<T>} schema
  * @property {Record<string, import('ai').Tool>} [tools]
  * @property {number} [maxSteps] model calls allowed, counting tool rounds and the final answer
+ * @property {number} [searchFeeMicro] what one web search costs, on top of the tokens
  * @property {() => Date} now
  * @property {(ms: number) => Promise<void>} [sleep]
  * @property {typeof generateText} [generate] replaced in tests
@@ -78,6 +80,7 @@ export async function callModel(o) {
     const used = []
     /** @type {unknown[]} */
     const steps = []
+    let searches = 0
     try {
       const result = await generate({
         model: o.languageModel,
@@ -91,17 +94,24 @@ export async function callModel(o) {
         abortSignal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),
         onStepFinish: (s) => {
           used.push(s.usage)
-          steps.push({ text: s.text, toolCalls: s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })), toolResults: s.toolResults.map((r) => ({ tool: r.toolName, output: r.output })), usage: s.usage })
+          searches += searchesIn(s)
+          const grounding = /** @type {any} */ (s.providerMetadata)?.google?.groundingMetadata
+          steps.push({
+            text: s.text, toolCalls: s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })), toolResults: s.toolResults.map((r) => ({ tool: r.toolName, output: r.output })), usage: s.usage,
+            // What a web search read: the pages it cited, and Gemini's grounding queries.
+            ...(s.sources?.length ? { sources: s.sources.map((x) => /** @type {any} */ (x).url ?? /** @type {any} */ (x).title ?? null) } : {}),
+            ...(grounding?.webSearchQueries ? { searchQueries: grounding.webSearchQueries } : {}),
+          })
         },
       })
       const output = /** @type {T} */ (result.output)
       const toolCalls = result.steps.flatMap((s) => s.toolCalls.map((c) => ({ tool: c.toolName, input: c.input })))
-      costMicro += finish(db, runId, model, result.totalUsage, { status: 'succeeded', response: JSON.stringify({ text: result.text, toolCalls, steps }), now })
+      costMicro += finish(db, runId, model, result.totalUsage, { status: 'succeeded', response: JSON.stringify({ text: result.text, toolCalls, steps }), searches, searchFeeMicro: o.searchFeeMicro, now })
       return { ok: true, output, runId, costMicro }
     } catch (e) {
       error = e instanceof Error ? e.message : String(e)
       if (NoObjectGeneratedError.isInstance(e)) {
-        costMicro += finish(db, runId, model, e.usage, { status: 'failed', response: e.text ?? null, error: `The answer didn't match the expected format: ${error}`, now })
+        costMicro += finish(db, runId, model, e.usage, { status: 'failed', response: e.text ?? null, error: `The answer didn't match the expected format: ${error}`, searches, searchFeeMicro: o.searchFeeMicro, now })
         if (!repaired) {
           // One repair attempt: show the model its answer and what was wrong with it.
           repaired = true
@@ -111,7 +121,7 @@ export async function callModel(o) {
           continue
         }
       } else {
-        costMicro += finish(db, runId, model, sumUsage(used), { status: 'failed', response: steps.length ? JSON.stringify({ steps }) : null, error, now })
+        costMicro += finish(db, runId, model, sumUsage(used), { status: 'failed', response: steps.length ? JSON.stringify({ steps }) : null, error, searches, searchFeeMicro: o.searchFeeMicro, now })
       }
       if (attempt < MAX_ATTEMPTS) await sleep(retryDelay(e, attempt))
     }
@@ -124,14 +134,14 @@ export async function callModel(o) {
  * @param {number} runId
  * @param {import('./models.js').ModelRow} model
  * @param {import('ai').LanguageModelUsage | undefined} usage
- * @param {{ status: 'succeeded' | 'failed', response: string | null, error?: string | null, now: () => Date }} r
- * @returns {number} the call's cost
+ * @param {{ status: 'succeeded' | 'failed', response: string | null, error?: string | null, searches?: number, searchFeeMicro?: number, now: () => Date }} r
+ * @returns {number} the call's cost, web searches included
  */
-function finish(db, runId, model, usage, { status, response, error = null, now }) {
+function finish(db, runId, model, usage, { status, response, error = null, searches = 0, searchFeeMicro = 0, now }) {
   const tokens = { input: usage?.inputTokens ?? 0, cached: usage?.inputTokenDetails?.cacheReadTokens ?? 0, written: usage?.inputTokenDetails?.cacheWriteTokens ?? 0, output: usage?.outputTokens ?? 0 }
-  const cost = costOf(model, tokens)
-  db.run(`UPDATE runs SET status = ?, response = ?, error = ?, tokens_in = ?, tokens_cached = ?, tokens_out = ?, cost_micro = ?, finished_at = ? WHERE id = ?`,
-    [status, response, error, tokens.input, tokens.cached, tokens.output, cost, now().toISOString(), runId])
+  const cost = costOf(model, tokens) + searches * searchFeeMicro
+  db.run(`UPDATE runs SET status = ?, response = ?, error = ?, tokens_in = ?, tokens_cached = ?, tokens_out = ?, searches = ?, cost_micro = ?, finished_at = ? WHERE id = ?`,
+    [status, response, error, tokens.input, tokens.cached, tokens.output, searches, cost, now().toISOString(), runId])
   return cost
 }
 

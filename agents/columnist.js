@@ -15,7 +15,7 @@ export const postSchema = z.object({
   body: z.string().min(1).describe('The text, in short paragraphs separated by blank lines'),
 })
 
-const STYLE = `You are the Market Columnist for Market Jury, an experiment in which AI models each run a portfolio of virtual US dollars on US stocks and ETFs. The Traders are named by model and cadence (for example "Claude daily"); The Index is a portfolio that simply holds SPY, the S&P 500 fund, as the yardstick. Your readers are new to trading.
+const STYLE = `You are the Market Columnist for Market Jury, an experiment in which AI models each run a portfolio of virtual US dollars on US stocks and ETFs. The Traders are named by model and track (for example "Claude daily"); each track is a group of Traders, one per model, who all play by the same conditions, and some tracks may also search the web; The Index is a portfolio that simply holds SPY, the S&P 500 fund, as the yardstick. Your readers are new to trading.
 
 How you write:
 - Plain sentences first; when you use a trading term, explain it in the same sentence.
@@ -51,8 +51,9 @@ const signed = (pct) => (pct === null ? 'n/a' : `${pct > 0 ? '+' : ''}${pct.toFi
  */
 export function columnistData(db, from, to) {
   const before = previousTradingDay(db, from)
-  const traders = /** @type {Array<{ id: number, name: string, kind: string, cadence: string, provider: string | null, model_version: string | null }>} */ (
-    db.query(`SELECT t.id, t.name, t.kind, t.cadence, m.provider, m.model_version FROM traders t LEFT JOIN models m ON m.id = t.model_id
+  const traders = /** @type {Array<{ id: number, name: string, kind: string, cadence: string, provider: string | null, model_version: string | null, track: string | null, web_search: string | null, briefing_pack: string | null }>} */ (
+    db.query(`SELECT t.id, t.name, t.kind, t.cadence, m.provider, m.model_version, k.title AS track, k.web_search, k.briefing_pack
+              FROM traders t LEFT JOIN models m ON m.id = t.model_id LEFT JOIN tracks k ON k.id = t.track_id
               WHERE t.started_on <= ?1 AND (t.retired_on IS NULL OR t.retired_on >= ?2) ORDER BY t.kind = 'benchmark', t.id`).all(to, from)
   )
   const total = db.prepare('SELECT total_micro FROM snapshots WHERE trader_id = ? AND trading_date = ?')
@@ -71,7 +72,8 @@ export function columnistData(db, from, to) {
     const ds = /** @type {Array<{ run_id: number, trading_date: string, market_view: string, no_trades_reason: string | null, journal: string }>} */ (decisions.all(t.id, from, to))
     return {
       trader: t.name,
-      kind: t.kind === 'benchmark' ? 'The Index (holds SPY)' : `${t.provider} ${t.model_version}, ${t.cadence}`,
+      kind: t.kind === 'benchmark' ? 'The Index (holds SPY)'
+        : `${t.provider} ${t.model_version}, ${t.cadence}${t.track ? `, ${t.track} track` : ''}${t.web_search && t.web_search !== 'off' ? ', can search the web' : ''}${t.briefing_pack === 'prices_only' ? ', briefing pack without headlines' : ''}`,
       value_usd: end === null ? null : dollars(end),
       period_change_pct: end !== null && start ? Math.round((end / start - 1) * 10_000) / 100 : null,
       return_since_start_pct: m.return_pct ?? null,
