@@ -6,8 +6,6 @@ const PASSWORD = 'correct horse battery staple'
 
 /** @type {ReturnType<typeof testServer>} */
 let t
-// Start from the real time: sessions are checked against the real clock, so a
-// fixed date here would make every session expire once it is a month old.
 let clock = Date.now()
 let secret = ''
 
