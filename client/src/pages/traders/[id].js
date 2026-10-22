@@ -50,7 +50,7 @@ function TraderView(d) {
       <header class="flex flex-col gap-2 border-b border-line pb-3">
         <p class="prompt prompt-caret">${t.kind === 'benchmark' ? 'The benchmark: holds SPY from day one' : `${t.provider} · ${t.modelVersion} · ${t.effort} effort`}</p>
         <h1 class="flex items-center gap-3 font-display text-4xl font-semibold tracking-tight text-fg">${TraderMark(t, { size: 'lg' })}${displayName(t.name)}</h1>
-        <p class="flex flex-wrap gap-x-4 font-mono text-[13px] text-fg-soft"><span>Joined ${day(t.startedOn)}</span>${t.status !== 'active' ? html`<span>${t.status === 'retiring' ? 'Retiring at the next open' : `Retired ${day(t.retiredOn)}`}</span>` : ''}${d.asOf ? html`<span>Figures at the close of ${day(d.asOf)}</span>` : ''}</p>
+        <p class="flex flex-wrap gap-x-4 font-mono text-[13px] text-fg-soft"><span>Joined ${day(t.startedOn)}</span>${t.trackTitle ? html`<span>${t.trackTitle} track${t.webSearch && t.webSearch !== 'off' ? ' · searches the web' : ''}${t.briefingPack === 'prices_only' ? ' · prices only, no headlines' : ''}</span>` : ''}${t.status !== 'active' ? html`<span>${t.status === 'retiring' ? 'Retiring at the next open' : `Retired ${day(t.retiredOn)}`}</span>` : ''}${d.asOf ? html`<span>Figures at the close of ${day(d.asOf)}</span>` : ''}</p>
       </header>
 
       <dl class="grid grid-cols-2 gap-3 sm:grid-cols-4">

@@ -199,6 +199,28 @@ describe('Trade Master routes', () => {
     expect((await call(`/api/admin/traders/${id}/retire`, { method: 'POST' })).status).toBe(400)
   })
 
+  test('adds a track with its projected cost, renames it, and refuses a visitor', async () => {
+    await call('/api/admin/experiment/start', { method: 'POST', body: {} })
+    const track = { title: 'Weekly research', cadence: 'weekly', briefingPack: 'full', webSearch: 'native', searchesPerRun: 5 }
+    expect((await call('/api/admin/tracks', { method: 'POST', body: track, cookie: '' })).status).toBe(401)
+    const estimate = await data(call('/api/admin/tracks/estimate', { method: 'POST', body: track }))
+    expect(estimate).toMatchObject({ traders: 4, warning: null })
+    expect(estimate.addedUsd).toBeGreaterThan(0)
+    const added = await call('/api/admin/tracks', { method: 'POST', body: track })
+    expect(added.status).toBe(201)
+    const { id, slug, startedOn, traders } = await data(Promise.resolve(added))
+    expect({ slug, startedOn, traders }).toEqual({ slug: 'weekly-research', startedOn: '2026-11-27', traders: 4 })
+
+    expect((await call(`/api/admin/tracks/${id}`, { method: 'PATCH', body: { title: 'Weekly with web search' } })).status).toBe(200)
+    const list = await data(call('/api/admin/tracks'))
+    expect(list.tracks.map((/** @type {any} */ k) => k.title)).toEqual(['Daily', 'Weekly', 'Weekly with web search'])
+    expect(list.tracks[2]).toMatchObject({ webSearch: 'native', searchesPerRun: 5, traders: 4 })
+    // A new Trader can join it, and takes its cadence.
+    const trader = { name: 'Claude Opus weekly research', provider: 'anthropic', modelVersion: 'claude-opus-5-5', track: 'weekly-research', inputUsdPerM: 5, outputUsdPerM: 25 }
+    const joined = await data(call('/api/admin/traders', { method: 'POST', body: trader }))
+    expect(db.query('SELECT cadence, track_id FROM traders WHERE id = ?').get(joined.id)).toEqual({ cadence: 'weekly', track_id: id })
+  })
+
   test('takes a ticker off the stock menu', async () => {
     db.run("INSERT INTO instruments (ticker, name, added_on) VALUES ('AAPL', 'Apple', '2026-01-02')")
     expect((await call('/api/admin/menu', { method: 'PATCH', body: { ticker: 'aapl', onMenu: false } })).status).toBe(200)

@@ -5,12 +5,12 @@ import { Delta } from '../components/Delta.js'
 import { LandingHero } from '../components/LandingHero.js'
 import { MarketStatus } from '../components/MarketStatus.js'
 import { fresh, Loadable } from '../components/Loadable.js'
-import { Segmented } from '../components/Segmented.js'
 import { StandingsTable } from '../components/StandingsTable.js'
 import { Term } from '../components/Term.js'
+import { TrackPicker, trackLabel } from '../components/TrackPicker.js'
 import { ValueChart } from '../components/ValueChart.js'
 import { day } from '../utils/format.js'
-import { navigate } from '../utils/nav.js'
+import { navigate, queryParam, setQueryParam } from '../utils/nav.js'
 import { formatClock, formatDateline, NY_TIME_ZONE, viewerTimeZone, zoneLabel } from '../utils/time.js'
 
 export const meta = { layout: 'app', title: 'Market Jury' }
@@ -51,12 +51,19 @@ function OverviewPage() {
     }
   }, 15_000)
   onLeave(() => clearInterval(timer))
-  const daily = useFetch('/api/series?track=daily')
-  const weekly = useFetch('/api/series?track=weekly', { immediate: false })
+  // One value chart per Track, each fetched the first time it is picked.
+  /** @type {Record<string, ReturnType<typeof useFetch>>} */
+  const charts = { daily: useFetch('/api/series?track=daily') }
+  const chartOf = (/** @type {string} */ slug) => (charts[slug] ??= useFetch(`/api/series?track=${encodeURIComponent(slug)}`, { immediate: false }))
   const pickTrack = (/** @type {string} */ t) => {
     ui.track = t
-    if (t === 'weekly' && !weekly.data()) weekly.refetch()
+    setQueryParam('track', t, 'daily')
+    const chart = chartOf(t)
+    if (!chart.data() && !chart.loading()) chart.refetch()
   }
+  // A link with ?track= reopens on that Track.
+  const linked = queryParam('track') ?? ''
+  if (/^[a-z0-9-]+$/.test(linked) && linked !== 'daily') pickTrack(linked)
 
   return html`
     <div class="flex flex-col gap-7">
@@ -80,16 +87,15 @@ function OverviewPage() {
         <section class="flex flex-col gap-3" aria-labelledby="ahead">
           <div class="flex flex-wrap items-baseline justify-between gap-2">
             <h2 id="ahead" class="font-display text-[28px] font-semibold leading-8 text-fg">Who is ahead</h2>
-            ${Segmented({ label: 'Track', options: [{ value: 'daily', label: 'Daily' }, { value: 'weekly', label: 'Weekly' }], value: () => ui.track, onPick: pickTrack })}
+            ${TrackPicker({ value: () => ui.track, onPick: pickTrack, short: true })}
           </div>
           <p class="max-w-prose text-[15px] leading-relaxed text-fg-soft">Each line is one Trader's ${Term('portfolio')} value since day one. The dashed line is ${Term('The Index', 'the index')}: what you'd have if you just bought SPY.</p>
-          <div class="${() => (ui.track === 'daily' ? '' : 'hidden')}">${Loadable(daily, (d) => ValueChart({ dates: d.dates, lines: d.series, label: 'Daily track since day one' }))}</div>
-          <div class="${() => (ui.track === 'weekly' ? '' : 'hidden')}">${Loadable(weekly, (d) => ValueChart({ dates: d.dates, lines: d.series, label: 'Weekly track since day one' }))}</div>
+          ${(o.tracks ?? []).map((/** @type {{ slug: string }} */ k) => html`<div class="${() => (ui.track === k.slug ? '' : 'hidden')}">${Loadable(chartOf(k.slug), (d) => ValueChart({ dates: d.dates, lines: d.series, label: `${trackLabel(o.tracks, k.slug)} since day one` }))}</div>`.key(k.slug))}
         </section>
 
         <section class="flex flex-col gap-2" aria-labelledby="standings">
           <h2 id="standings" class="font-display text-[28px] font-semibold leading-8 text-fg">Standings</h2>
-          ${() => fresh(ui.track, StandingsTable({ rows: ui.track === 'weekly' ? o.standings.weekly : o.standings.daily, returnLabel: 'Since start', compact: true }))}
+          ${() => fresh(ui.track, StandingsTable({ rows: o.standings[ui.track] ?? [], returnLabel: 'Since start', compact: true }))}
           <a href="/standings" class="${link}" @click="${navigate('/standings')}">See full standings and badges</a>
         </section>
 

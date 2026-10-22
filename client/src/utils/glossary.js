@@ -12,7 +12,6 @@ export const GLOSSARY = /** @type {const} */ ({
   'vs the index': 'A Trader\'s return minus The Index\'s return over the same dates. Above zero means it beat simply holding the market.',
   trimmed: 'The Compliance Desk cut an order down so it fits the rules, for example to keep a stock under the position cap.',
   'trimmed / rejected': 'Trimmed: the Compliance Desk cut an order down to fit the rules, and the rest went through. Rejected: the whole order was refused.',
-  'rule breaks': 'Orders the Compliance Desk had to trim or reject because they broke a rule.',
   'briefing pack': 'The one document every Trader reads before deciding: the day\'s prices, biggest moves and news headlines. The Floor Runner builds it after the close.',
   'at the open': 'Orders decided in the evening are filled at the next trading day\'s official opening price, the first price of the day.',
   etf: 'An exchange-traded fund: one share that holds a basket of many stocks or bonds, such as SPY for the S&P 500.',
@@ -21,6 +20,7 @@ export const GLOSSARY = /** @type {const} */ ({
   'market view': 'The Trader\'s own summary of what the market did and what it thinks next, written with each decision.',
   journal: 'Private notes a Trader keeps for itself between runs. It reads them back before its next decision.',
   turnover: 'How much a Trader bought and sold in a day, as a share of its portfolio. High turnover means lots of trading.',
+  track: 'A group of Traders, one per model, who all play by the same conditions: how often they decide, how much of the briefing pack they get, and whether they may search the web.',
   'daily track': 'The Traders that decide every evening.',
   'weekly track': 'The Traders that decide once a week, after Friday\'s close. Same models, less trading.',
 })

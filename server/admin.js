@@ -7,7 +7,9 @@ import { rulesFor } from '../core/portfolio.js'
 import { createTrader, retireTrader } from '../core/traders.js'
 import { budget } from '../agents/budget.js'
 import { costOf, ensureModel, KEY_NAMES } from '../agents/models.js'
-import { checkEndDate, defaultRules, dryRun, firstDecisionDate, lastDayFor, PAPER_PHASE_DAYS, pauseExperiment, resumeExperiment, seedLineUp, setStartingCash, settings, startExperiment } from '../jobs/experiment.js'
+import { SEARCH_FEE_MICRO } from '../agents/search.js'
+import { checkNewTrack, checkTitle, describeTrack, trackBySlug, tracks } from '../core/tracks.js'
+import { checkEndDate, createTrack, defaultRules, dryRun, firstDecisionDate, firstEveningFor, lastDayFor, renameTrack, PAPER_PHASE_DAYS, pauseExperiment, resumeExperiment, seedLineUp, setStartingCash, settings, startExperiment } from '../jobs/experiment.js'
 import { openingBellDue, rerunStep, STEPS } from '../jobs/schedule.js'
 import { isTradeMaster } from './auth.js'
 import { error, json, readJson } from './http.js'
@@ -19,6 +21,8 @@ import { dayNumber, plannedDays, latestDate } from './reads.js'
 /** PRD usage assumptions per run, for projecting a model's monthly cost. */
 const TOKENS_PER_RUN = { input: 20_000, cached: 0, output: 4_000 }
 const RUNS_PER_MONTH = { daily: 21, weekly: 4.35 }
+/** Input tokens one web search adds to a run (its results, read again in later rounds). */
+const TOKENS_PER_SEARCH = 8_000
 
 /**
  * @param {StepContext} ctx the scheduler's context (database, clock, market data, models)
@@ -125,7 +129,7 @@ export function adminRoutes(ctx) {
       GET: guarded(() => {
         const b = budget(db, ctx.now())
         const byTrader = db.query(`SELECT COALESCE(t.name, 'Market Columnist') AS name, m.provider, m.model_version, COUNT(*) AS calls,
-                                     SUM(r.tokens_in) AS tokens_in, SUM(r.tokens_out) AS tokens_out, SUM(r.cost_micro) AS cost_micro
+                                     SUM(r.tokens_in) AS tokens_in, SUM(r.tokens_out) AS tokens_out, SUM(r.searches) AS searches, SUM(r.cost_micro) AS cost_micro
                                    FROM runs r JOIN models m ON m.id = r.model_id LEFT JOIN traders t ON t.id = r.trader_id
                                    WHERE substr(r.started_at, 1, 7) = ? GROUP BY r.trader_id, m.id ORDER BY cost_micro DESC`).all(b.month)
         const byProvider = db.query(`SELECT m.provider, SUM(r.cost_micro) AS cost_micro FROM runs r JOIN models m ON m.id = r.model_id
@@ -191,17 +195,41 @@ export function adminRoutes(ctx) {
       }),
     },
 
+    '/api/admin/tracks': {
+      GET: guarded(() => {
+        const count = db.prepare("SELECT COUNT(*) AS n FROM traders WHERE track_id = ? AND kind = 'ai' AND status <> 'retired'")
+        return json({
+          tracks: tracks(db).map((k) => ({
+            id: k.id, slug: k.slug, title: k.title, cadence: k.cadence, briefingPack: k.briefing_pack, webSearch: k.web_search,
+            searchesPerRun: k.searches_per_run, startedOn: k.started_on, summary: describeTrack(k), traders: /** @type {{ n: number }} */ (count.get(k.id)).n,
+          })),
+        })
+      }),
+      POST: guarded(async (req) => json(createTrack(db, await body(req), ctx.now()), 201)),
+    },
+    '/api/admin/tracks/estimate': {
+      POST: guarded(async (req) => json(trackProjection(db, ctx.now(), checkNewTrack({ ...(await body(req)), title: 'estimate' })))),
+    },
+    '/api/admin/tracks/:id': {
+      PATCH: guarded(async (req) => {
+        const b = await body(req)
+        renameTrack(db, Number(req.params?.id), checkTitle(b.title))
+        return json({ ok: true })
+      }),
+    },
+
     '/api/admin/traders': {
       GET: guarded(() => {
         if (settings(db).experiment_state === 'setup') seedLineUp(db, ctx.now())
         return json({
           traders: db.query(`SELECT t.id, t.name, t.kind, t.cadence, t.colour_slot, t.status, t.started_on, t.retired_on, m.provider, m.model_version, m.effort,
+                               k.slug AS track, k.title AS track_title,
                                (SELECT COUNT(*) FROM positions p WHERE p.trader_id = t.id AND p.quantity_micro > 0) AS positions
-                             FROM traders t LEFT JOIN models m ON m.id = t.model_id ORDER BY t.kind = 'benchmark', t.id`).all(),
+                             FROM traders t LEFT JOIN models m ON m.id = t.model_id LEFT JOIN tracks k ON k.id = t.track_id ORDER BY t.kind = 'benchmark', t.id`).all(),
         })
       }),
       POST: guarded(async (req) => {
-        const t = newTraderFrom(await body(req))
+        const t = newTraderFrom(await body(req), (slug) => trackBySlug(db, slug))
         const now = ctx.now()
         const s = settings(db)
         if (s.experiment_state === 'ended') throw new Error('The experiment has ended.')
@@ -209,14 +237,14 @@ export function adminRoutes(ctx) {
         const slot = Array.from({ length: 12 }, (_, i) => i + 1).find((n) => !used.includes(n))
         if (!slot) throw new Error('All 12 Trader colours are in use. Retire a Trader first.')
         const modelId = ensureModel(db, t.model, now)
-        const startedOn = s.experiment_state === 'setup' ? null : firstDecisionDate(db, now)
-        const id = createTrader(db, { name: t.name, modelId, cadence: t.cadence, colourSlot: slot, startedOn, asOf: startedOn ?? marketDate(now), cashMicro: s.starting_cash_micro, rules: defaultRules(db), now })
+        const startedOn = s.experiment_state === 'setup' ? null : firstEveningFor(db, t.cadence, now)
+        const id = createTrader(db, { name: t.name, modelId, cadence: t.cadence, trackId: t.trackId, colourSlot: slot, startedOn, asOf: startedOn ?? marketDate(now), cashMicro: s.starting_cash_micro, rules: defaultRules(db), now })
         return json({ id, startedOn, projection: projection(db, now, t.model, t.cadence) }, 201)
       }),
     },
     '/api/admin/traders/estimate': {
       POST: guarded(async (req) => {
-        const t = newTraderFrom({ name: 'estimate', ...(await body(req)) })
+        const t = newTraderFrom({ name: 'estimate', ...(await body(req)) }, (slug) => trackBySlug(db, slug))
         return json(projection(db, ctx.now(), t.model, t.cadence))
       }),
     },
@@ -261,17 +289,21 @@ function positive(value, what, max) {
 }
 
 /**
- * Check a new Trader's details from the request.
+ * Check a new Trader's details from the request. It joins a Track (and takes
+ * its cadence); an older client may still send only a cadence, meaning the
+ * daily or weekly Track.
  * @param {Record<string, unknown>} b
+ * @param {(slug: string) => import('../core/tracks.js').Track | null} trackFor
  */
-function newTraderFrom(b) {
+function newTraderFrom(b, trackFor) {
   const name = String(b.name ?? '').trim()
   if (!name) throw new Error('Give the Trader a name.')
   if (name.length > 60) throw new Error('The Trader name can be at most 60 characters.')
   const provider = String(b.provider ?? '')
   if (!(provider in KEY_NAMES)) throw new Error(`The provider must be one of: ${Object.keys(KEY_NAMES).join(', ')}.`)
-  const cadence = b.cadence === 'weekly' ? 'weekly' : b.cadence === 'daily' ? 'daily' : null
-  if (!cadence) throw new Error('The cadence must be daily or weekly.')
+  const track = trackFor(String(b.track ?? b.cadence ?? ''))
+  if (!track) throw new Error('Choose the track the Trader joins.')
+  const cadence = track.cadence
   const modelVersion = String(b.modelVersion ?? '').trim()
   if (!modelVersion) throw new Error('Give the exact model version.')
   if (modelVersion.length > 100) throw new Error('The model version can be at most 100 characters.')
@@ -280,7 +312,8 @@ function newTraderFrom(b) {
   if (!(cached >= 0 && cached <= 1_000)) throw new Error('The cached input price must be between $0 and $1,000.')
   return {
     name,
-    cadence: /** @type {'daily' | 'weekly'} */ (cadence),
+    cadence,
+    trackId: track.id,
     model: { provider, model_version: modelVersion, effort, input: positive(b.inputUsdPerM, 'The input price', 1_000), cached, output: positive(b.outputUsdPerM, 'The output price', 1_000) },
   }
 }
@@ -302,6 +335,33 @@ function projection(db, now, m, cadence) {
     projectedUsd: fromMicro(projectedMicro),
     ceilingUsd: fromMicro(b.ceilingMicro),
     warning: projectedMicro >= b.ceilingMicro ? `Adding this Trader would take the projected monthly spend to $${fromMicro(projectedMicro).toFixed(2)}, past the $${fromMicro(b.ceilingMicro).toFixed(2)} ceiling.` : null,
+  }
+}
+
+/**
+ * What adding a Track would do to the month's projected spend: one Trader per
+ * model in the line-up, each searching as much as the Track allows.
+ * @param {Database} db
+ * @param {Date} now
+ * @param {ReturnType<typeof checkNewTrack>} t
+ */
+function trackProjection(db, now, t) {
+  const models = /** @type {import('../agents/models.js').ModelRow[]} */ (
+    db.query(`SELECT * FROM models WHERE id IN (SELECT DISTINCT model_id FROM traders WHERE kind = 'ai' AND status = 'active')`).all())
+  const searches = t.webSearch === 'off' ? 0 : t.searchesPerRun
+  const perRun = models.reduce((sum, m) => {
+    const fee = t.webSearch === 'shared' ? SEARCH_FEE_MICRO.deepseek : /** @type {Record<string, number>} */ (SEARCH_FEE_MICRO)[m.provider] ?? 0
+    return sum + costOf(m, { ...TOKENS_PER_RUN, input: TOKENS_PER_RUN.input + searches * TOKENS_PER_SEARCH }) + searches * fee
+  }, 0)
+  const monthlyMicro = Math.round(perRun * RUNS_PER_MONTH[t.cadence])
+  const b = budget(db, now)
+  const projectedMicro = b.projectedMicro + monthlyMicro
+  return {
+    traders: models.length,
+    addedUsd: fromMicro(monthlyMicro),
+    projectedUsd: fromMicro(projectedMicro),
+    ceilingUsd: fromMicro(b.ceilingMicro),
+    warning: projectedMicro >= b.ceilingMicro ? `Adding this track would take the projected monthly spend to $${fromMicro(projectedMicro).toFixed(2)}, past the $${fromMicro(b.ceilingMicro).toFixed(2)} ceiling.` : null,
   }
 }
 

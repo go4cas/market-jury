@@ -64,7 +64,7 @@ const when = (iso) => {
 
 /**
  * A number field with its unit outside the box ("$ [ 25 ]", "[ 20 ] %").
- * @param {{ label: string, name: string, value?: string, unit: '$' | '%', min?: string, max?: string, step?: string, required?: boolean, disabled?: boolean, help?: any }} f
+ * @param {{ label: string, name: string, value?: string, unit: '$' | '%' | '', min?: string, max?: string, step?: string, required?: boolean, disabled?: boolean, help?: any }} f
  */
 const NumberField = (f) => html`<label class="${field}">
   <span class="prompt">${f.label}</span>
@@ -80,11 +80,13 @@ function SettingsPage() {
   const status = useFetch('/api/admin/status')
   const settings = useFetch('/api/admin/settings')
   const traders = useFetch('/api/admin/traders')
+  const tracks = useFetch('/api/admin/tracks')
   const steps = useFetch('/api/admin/steps')
   const rehearsal = useFetch('/api/admin/dry-run')
-  const refresh = () => { status.refetch(); settings.refetch(); traders.refetch(); steps.refetch() }
+  const refresh = () => { status.refetch(); settings.refetch(); traders.refetch(); tracks.refetch(); steps.refetch() }
   const added = () => { toast.success('Trader added. It joins at the next evening run.'); refresh() }
-  const sections = disclosures({ 'line-up': true, rules: false, menu: false, scheduler: false, 'dry-run': false })
+  const trackAdded = (/** @type {any} */ r) => { toast.success(r.startedOn ? `Track added. Its Traders decide for the first time on ${day(r.startedOn)}.` : 'Track added. Its Traders join when the experiment starts.'); refresh() }
+  const sections = disclosures({ 'line-up': true, tracks: false, rules: false, menu: false, scheduler: false, 'dry-run': false })
   const ui = reactive({ unsaved: false })
 
   // While a dry run is going, check on it every few seconds.
@@ -138,7 +140,15 @@ function SettingsPage() {
           title: 'The line-up',
           summary: () => `${t.traders.filter((/** @type {any} */ x) => x.kind === 'ai').length} Traders · ${t.traders.filter((/** @type {any} */ x) => x.kind === 'ai' && x.status === 'active').length} active`,
           state: sections,
-          content: LineUp(t.traders, act, () => status.data()?.nextOpen ?? null, added),
+          content: LineUp(t.traders, act, () => status.data()?.nextOpen ?? null, added, () => tracks.data()?.tracks ?? []),
+        }))}
+
+        ${Loadable(tracks, (k) => Disclosure({
+          id: 'tracks',
+          title: 'Tracks',
+          summary: () => k.tracks.map((/** @type {any} */ x) => x.title).join(' · '),
+          state: sections,
+          content: Tracks(k.tracks, act, trackAdded),
         }))}
 
         ${Loadable(settings, (s) => Disclosure({
@@ -337,8 +347,9 @@ function Scheduler(steps, act) {
  * @param {Function} act
  * @param {() => string | null} nextOpen
  * @param {() => void} added
+ * @param {() => any[]} tracks
  */
-function LineUp(list, act, nextOpen, added) {
+function LineUp(list, act, nextOpen, added, tracks) {
   /** @param {any} t */
   const retire = async (t) => {
     const name = displayName(t.name)
@@ -354,10 +365,103 @@ function LineUp(list, act, nextOpen, added) {
   }
   return html`<ul class="flex flex-col">${list.map((t) => html`<li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-line py-2 first:border-t-0">
       <span class="flex min-w-0 flex-col">${TraderName({ name: t.name, kind: t.kind, colourSlot: t.colour_slot })}
-        <span class="font-mono text-xs text-fg-soft [overflow-wrap:anywhere]">${t.kind === 'benchmark' ? 'Holds SPY' : `${t.provider} · ${t.model_version} · ${t.effort}`}${t.status !== 'active' ? ` · ${t.status}` : ''}</span></span>
+        <span class="font-mono text-xs text-fg-soft [overflow-wrap:anywhere]">${t.kind === 'benchmark' ? 'Holds SPY' : `${t.provider} · ${t.model_version} · ${t.effort}${t.track_title ? ` · ${t.track_title} track` : ''}`}${t.status !== 'active' ? ` · ${t.status}` : ''}</span></span>
       ${t.kind === 'ai' && t.status === 'active' ? html`<button type="button" class="${`${btnSecondary} whitespace-nowrap`}" @click="${() => retire(t)}">Retire</button>` : ''}
     </li>`.key(t.id))}</ul>
-    <div><button type="button" class="${btnSecondary}" @click="${() => addTrader(added)}">Add a Trader</button></div>`
+    <div><button type="button" class="${btnSecondary}" @click="${() => addTrader(added, tracks())}">Add a Trader</button></div>`
+}
+
+/**
+ * The Tracks: each one's title (renamable) and the conditions its Traders play
+ * by (fixed once it is created), and a button to add a Track.
+ * @param {any[]} list
+ * @param {Function} act
+ * @param {(r: any) => void} added
+ */
+function Tracks(list, act, added) {
+  /** @param {any} k */
+  const rename = (k) => openDialog((close, ids) => html`
+    ${DialogHead(ids.title, `Rename the ${k.title} track`, () => close())}
+    <form class="contents" @submit="${/** @param {Event} e */ async (e) => {
+      e.preventDefault()
+      const title = String(formValues(/** @type {HTMLFormElement} */ (e.target)).title ?? '')
+      if (await act('PATCH', `/api/admin/tracks/${k.id}`, { title }, 'Track renamed.')) close()
+    }}">
+      <div class="mj-dialog__body">
+        <p id="${ids.desc}" class="text-[15px] leading-[22px] text-fg-soft">The title is shown to readers as "title track". The Traders never see it, so renaming changes nothing for them.</p>
+        <label class="${field}"><span class="prompt">Title</span><input class="${input}" name="title" required maxlength="40" value="${k.title}" autofocus /></label>
+      </div>
+      <div class="mj-dialog__foot">
+        <button type="button" class="${btnSecondary}" @click="${() => close()}">Cancel</button>
+        <button type="submit" class="${btnPrimary}">Rename</button>
+      </div>
+    </form>`)
+  return html`<p class="max-w-prose text-[15px] text-fg-soft">A track is a group of Traders, one per model, who all play by the same conditions. Its conditions are fixed once it starts; to try others, add a track.</p>
+    <ul class="flex flex-col">${list.map((k) => html`<li class="grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 border-t border-line py-2 first:border-t-0">
+      <span class="flex min-w-0 flex-col"><span class="font-semibold text-fg">${k.title} track</span>
+        <span class="text-[13px] leading-[18px] text-fg-soft">${k.traders} ${k.traders === 1 ? 'Trader' : 'Traders'}. ${k.summary[0].toUpperCase()}${k.summary.slice(1)}.${k.startedOn ? ` Since ${day(k.startedOn)}.` : ''}</span></span>
+      <button type="button" class="${`${btnSecondary} whitespace-nowrap`}" @click="${() => rename(k)}">Rename</button>
+    </li>`.key(k.id))}</ul>
+    <div><button type="button" class="${btnSecondary}" @click="${() => addTrack(added)}">Add a track</button></div>`
+}
+
+/**
+ * The Add a track form: the title, how often it decides, how much of the
+ * briefing pack it gets and whether it may search the web, with the monthly
+ * cost of one new Trader per model.
+ * @param {(r: any) => void} added called with the new track
+ */
+function addTrack(added) {
+  const ui = reactive({ estimate: /** @type {any} */ (null), search: 'native', error: '' })
+  /** @param {HTMLFormElement} form */
+  const trackFrom = (form) => {
+    const v = formValues(form)
+    return { title: v.title, cadence: v.cadence, briefingPack: v.briefingPack, webSearch: v.webSearch, searchesPerRun: Number(v.searchesPerRun ?? 0) }
+  }
+  /** @type {ReturnType<typeof setTimeout> | undefined} */
+  let wait
+  /** @param {HTMLFormElement} form */
+  const changed = (form) => {
+    ui.search = String(formValues(form).webSearch)
+    clearTimeout(wait)
+    wait = setTimeout(async () => {
+      const r = await send('POST', '/api/admin/tracks/estimate', trackFrom(form))
+      ui.estimate = r.ok ? r.data : null
+    }, 300)
+  }
+  /** @param {string} label @param {string} name @param {string[][]} options */
+  const select = (label, name, options) => html`<label class="${field}"><span class="prompt">${label}</span><select class="mj-select" name="${name}">${options.map(([value, text]) => html`<option value="${value}">${text}</option>`)}</select></label>`
+
+  openDialog((close, ids) => html`
+    ${DialogHead(ids.title, 'Add a track', () => close())}
+    <form class="contents"
+      @input="${/** @param {Event} e */ (e) => changed(/** @type {HTMLFormElement} */ (/** @type {HTMLInputElement} */ (e.target).form))}"
+      @submit="${/** @param {Event} e */ async (e) => {
+        e.preventDefault()
+        const form = /** @type {HTMLFormElement} */ (e.target)
+        if (!form.checkValidity()) return
+        const r = await send('POST', '/api/admin/tracks', trackFrom(form))
+        if (!r.ok) { ui.error = r.error; return }
+        close()
+        added(r.data)
+      }}">
+      <div class="mj-dialog__body">
+        <p id="${ids.desc}" class="text-[15px] leading-[22px] text-fg-soft">The track gets one new Trader for each model in the line-up, each with fresh starting cash and its model's colour. Its conditions can't change once it starts. The change is listed on the About page from its first evening.</p>
+        <div class="grid gap-4 sm:grid-cols-2">
+          <label class="${`${field} sm:col-span-2`}"><span class="prompt">Title</span><input class="${input}" name="title" required maxlength="40" placeholder="Weekly research" autofocus /></label>
+          ${select('Decides', 'cadence', [['weekly', 'Once a week'], ['daily', 'Every evening']])}
+          ${select('Briefing pack', 'briefingPack', [['full', 'Full: prices and headlines'], ['prices_only', 'Prices only, no headlines']])}
+          ${select('Web search', 'webSearch', [['native', "Each model's own search"], ['shared', 'One shared search tool'], ['off', 'None']])}
+          <div class="${() => (ui.search === 'off' ? 'hidden' : '')}">${NumberField({ label: 'Searches per run, at most', name: 'searchesPerRun', unit: '', min: '1', max: '10', value: '5' })}</div>
+        </div>
+        ${() => fresh(JSON.stringify(ui.estimate), ui.estimate ? html`<p class="text-sm text-fg" role="status">${ui.estimate.traders} new Traders, adding about $${ui.estimate.addedUsd.toFixed(2)} a month, for a projected $${ui.estimate.projectedUsd.toFixed(2)} of the $${ui.estimate.ceilingUsd.toFixed(2)} budget.${ui.estimate.warning ? html` <strong class="text-bad">${ui.estimate.warning}</strong>` : ''}</p>` : html`<p class="text-sm text-fg-soft">The monthly cost shows here as you fill in the form.</p>`)}
+        ${() => (ui.error ? html`<p class="text-sm text-bad" role="alert">${ui.error}</p>` : '')}
+      </div>
+      <div class="mj-dialog__foot">
+        <button type="button" class="${btnSecondary}" @click="${() => close()}">Cancel</button>
+        <button type="submit" class="${btnPrimary}">Add the track</button>
+      </div>
+    </form>`, { wide: true })
 }
 
 const PROVIDERS = [['anthropic', 'Anthropic'], ['openai', 'OpenAI'], ['google', 'Google'], ['deepseek', 'DeepSeek']]
@@ -367,13 +471,14 @@ const EFFORTS = [['medium', 'Medium'], ['low', 'Low'], ['high', 'High'], ['defau
  * The Add a Trader form, in a wide dialog. The cost preview updates as the
  * fields fill in; Add stays unavailable until the form is complete.
  * @param {() => void} added called once the Trader is in
+ * @param {any[]} tracks the Tracks it can join
  */
-function addTrader(added) {
+function addTrader(added, tracks) {
   const ui = reactive({ estimate: /** @type {any} */ (null), valid: false, error: '', errors: /** @type {Record<string, string>} */ ({}) })
   /** @param {HTMLFormElement} form */
   const traderFrom = (form) => {
     const v = formValues(form)
-    return { name: v.name, provider: v.provider, modelVersion: v.modelVersion, effort: v.effort, cadence: v.cadence, inputUsdPerM: Number(v.inputUsdPerM), cachedUsdPerM: Number(v.cachedUsdPerM), outputUsdPerM: Number(v.outputUsdPerM) }
+    return { name: v.name, provider: v.provider, modelVersion: v.modelVersion, effort: v.effort, track: v.track, inputUsdPerM: Number(v.inputUsdPerM), cachedUsdPerM: Number(v.cachedUsdPerM), outputUsdPerM: Number(v.outputUsdPerM) }
   }
   /** @type {ReturnType<typeof setTimeout> | undefined} */
   let wait
@@ -413,7 +518,7 @@ function addTrader(added) {
           ${select('Provider', 'provider', PROVIDERS)}
           <label class="${field}"><span class="prompt">Exact model version</span><input class="${input}" name="modelVersion" required />${errorFor('modelVersion')}</label>
           ${select('Effort', 'effort', EFFORTS)}
-          ${select('Decides', 'cadence', [['daily', 'Every evening'], ['weekly', 'Once a week']])}
+          ${select('Track', 'track', tracks.length ? tracks.map((k) => [k.slug, `${k.title} (${k.cadence === 'daily' ? 'every evening' : 'once a week'})`]) : [['daily', 'Daily (every evening)'], ['weekly', 'Weekly (once a week)']])}
           ${NumberField({ label: 'Input, $ per million tokens', name: 'inputUsdPerM', unit: '$', step: '0.01', required: true })}
           ${NumberField({ label: 'Cached input, $ per million', name: 'cachedUsdPerM', unit: '$', step: '0.01', value: '0' })}
           ${NumberField({ label: 'Output, $ per million tokens', name: 'outputUsdPerM', unit: '$', step: '0.01', required: true })}

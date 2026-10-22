@@ -87,24 +87,35 @@ async function runTraders(ctx, date, cadence) {
   if (!mayRun(budget(db, ctx.now()), `${cadence} trader`)) return { skipped: `Skipped: the month's projected spend has reached the budget ceiling, so the ${cadence} Traders pause.` }
   const pack = /** @type {{ id: number } | null} */ (db.query('SELECT id FROM briefing_packs WHERE kind = ? AND trading_date = ?').get(cadence, date))
   if (!pack) throw new Error(`There is no ${cadence} briefing pack for ${date}.`)
-  const traders = /** @type {Array<{ id: number, name: string }>} */ (
-    db.query(`SELECT t.id, t.name FROM traders t WHERE t.kind = 'ai' AND t.status = 'active' AND t.cadence = ? AND t.started_on <= ?
+  const traders = /** @type {Array<{ id: number, name: string, searches: number }>} */ (
+    db.query(`SELECT t.id, t.name, COALESCE((SELECT k.web_search <> 'off' FROM tracks k WHERE k.id = t.track_id), 0) AS searches
+              FROM traders t WHERE t.kind = 'ai' AND t.status = 'active' AND t.cadence = ? AND t.started_on <= ?
               AND NOT EXISTS (SELECT 1 FROM decisions d JOIN runs r ON r.id = d.run_id WHERE d.trader_id = t.id AND d.trading_date = ? AND r.dry_run = 0)
               ORDER BY t.id`).all(cadence, date, date)
   )
   const held = []
+  const paused = []
   for (const t of traders) {
     // A pause takes effect between Traders, not only between steps.
     if (experimentState(db) !== 'running') {
       recordOrderMetrics(db, date)
       return { skipped: `The experiment was paused before ${t.name} decided.` }
     }
+    // Web search costs the most, so those Traders pause first when the budget runs out.
+    if (t.searches && !mayRun(budget(db, ctx.now()), `${cadence} trader`, { searches: true })) {
+      paused.push(t.name)
+      continue
+    }
     const r = await runTrader({ db, traderId: t.id, packId: pack.id, now: ctx.now, languageModel: ctx.languageModel, generate: ctx.generate, sleep: ctx.sleep })
     if (!r.ok) held.push(`${t.name} (${r.error})`)
   }
   // The day's metrics were written at the close; the orders exist only now.
   recordOrderMetrics(db, date)
-  return held.length ? `These Traders couldn't decide and hold this time: ${held.join('; ')}.` : null
+  const notes = [
+    held.length ? `These Traders couldn't decide and hold this time: ${held.join('; ')}.` : '',
+    paused.length ? `The month's projected spend has reached the budget ceiling, so these Traders, who search the web, pause: ${paused.join(', ')}.` : '',
+  ].filter(Boolean)
+  return notes.length ? notes.join(' ') : null
 }
 
 /**

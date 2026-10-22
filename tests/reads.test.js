@@ -33,6 +33,21 @@ beforeAll(async () => {
 afterEach(() => db.run('UPDATE settings SET gallery_enabled = 0'))
 
 describe('Gallery reads', () => {
+  test('lists the tracks, and compares two of them from the day both had started', async () => {
+    const { body } = await get('/api/tracks')
+    expect(body.tracks.map((/** @type {any} */ k) => [k.slug, k.title, k.traders])).toEqual([['daily', 'Daily', 4], ['weekly', 'Weekly', 4]])
+    const { body: c } = await get('/api/compare/tracks?a=daily&b=weekly')
+    expect(c.base).toBe('2026-11-23')
+    expect(c.lines.map((/** @type {any} */ l) => [l.slug, l.values[0]])).toEqual([['daily', 100], ['weekly', 100]])
+    expect(c.rows[0]).toMatchObject({ slug: 'daily', cadence: 'daily', traders: 4, webSearch: 'off', trimmed: expect.any(Number), rejected: expect.any(Number) })
+    expect(c.rows[0].costMicro).toBeGreaterThan(0)
+    // Visitors see everything but the cost, as with the Costs screen.
+    db.run('UPDATE settings SET gallery_enabled = 1')
+    const { body: open } = await get('/api/compare/tracks?a=daily&b=weekly', { cookie: '' })
+    expect(open.rows[0].costMicro).toBeUndefined()
+    expect((await get('/api/compare/tracks?a=daily&b=nope')).status).toBe(404)
+  })
+
   test('are closed to visitors until the Gallery is switched on', async () => {
     for (const path of ['/api/overview', '/api/series', '/api/standings', '/api/days/latest', '/api/history', '/api/traders', '/api/traders/1', '/api/columnist']) {
       const res = await get(path, { cookie: '' })
