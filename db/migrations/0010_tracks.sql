@@ -34,5 +34,5 @@ ALTER TABLE settings ADD COLUMN end_date_moved_at TEXT;
 -- Weekend batch for Mon 2 Nov 2026: the change log, only for the experiment
 -- it was made for (one started before it).
 INSERT INTO platform_changes (effective_on, area, summary, pr_number, created_at)
-SELECT '2026-11-02', 'Prompt', 'When the Trade Master moves the last trading day, each Trader''s next run says it moved, from which date to which.', NULL, '2026-10-31T00:00:00Z'
+SELECT '2026-11-02', 'Prompt', 'When the Trade Master moves the last trading day, each Trader''s next run says it moved, from which date to which.', 41, '2026-10-31T00:00:00Z'
 WHERE EXISTS (SELECT 1 FROM settings WHERE id = 1 AND start_date IS NOT NULL AND start_date < '2026-11-02');
