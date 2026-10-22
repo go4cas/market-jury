@@ -491,6 +491,9 @@ function trader(db, id) {
                       FROM fills f JOIN orders o ON o.id = f.order_id JOIN instruments i ON i.id = f.instrument_id
                       WHERE f.trader_id = ? ORDER BY f.trading_date DESC, f.id DESC LIMIT ${TRADES_SHOWN}`).all(id),
     totalTrades: /** @type {{ n: number }} */ (db.query('SELECT COUNT(*) AS n FROM fills WHERE trader_id = ?').get(id)).n,
+    // Orders the Compliance Desk trimmed, and those it rejected, since the start.
+    cuts: /** @type {{ trimmed: number, rejected: number }} */ (db.query(`SELECT COALESCE(SUM(verdict = 'trimmed'), 0) AS trimmed, COALESCE(SUM(verdict = 'rejected'), 0) AS rejected
+                                                                        FROM orders WHERE trader_id = ? AND status <> 'dry_run'`).get(id)),
     decisions: db.query(`SELECT d.trading_date AS date, d.market_view AS marketView, d.journal, d.no_trades_reason AS noTradesReason
                          FROM decisions d JOIN runs r ON r.id = d.run_id WHERE d.trader_id = ? AND r.dry_run = 0 ORDER BY d.trading_date DESC LIMIT 30`).all(id),
     metrics: [...metrics].map(([date, m]) => ({ date, ...m })),

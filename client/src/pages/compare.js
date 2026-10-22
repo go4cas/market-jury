@@ -22,6 +22,13 @@ const th = 'px-2 py-2 text-left font-mono text-xs font-medium uppercase tracking
 const td = 'border-t border-line px-2 py-2.5 text-right font-mono text-sm text-fg'
 const rowHead = 'border-t border-line px-2 py-2.5 text-left text-sm font-normal text-fg'
 
+// "3 / 1": orders the Compliance Desk trimmed, then those it rejected; zeros fade (as in Standings).
+/** @param {any} r */
+const cut = (r) => {
+  const n = (/** @type {number} */ v) => html`<span class="${v ? '' : 'text-fg-faint'}">${v}</span>`
+  return html`${n(r.trimmed)} / ${n(r.rejected)}`
+}
+
 /** Rows of the side-by-side table: how to read each measure and how to show it. */
 const ROWS = [
   { label: 'Portfolio value', show: (/** @type {any} */ d) => usd(d.totalMicro) },
@@ -31,18 +38,11 @@ const ROWS = [
   { label: html`Cash share${Hint('Cash share', 'cash')}`, show: (/** @type {any} */ d) => pct(d.metrics.at(-1)?.cash_share_pct) },
   { label: 'Stocks held', show: (/** @type {any} */ d) => String(d.holdings.length) },
   { label: 'Trades', show: (/** @type {any} */ d) => String(d.totalTrades) },
-  { label: html`Rule breaks${Hint('Rule breaks')}`, show: (/** @type {any} */ d) => String(d.metrics.reduce((/** @type {number} */ s, /** @type {any} */ m) => s + (m.rule_breaks ?? 0), 0)) },
+  { label: html`Trimmed / Rejected${Hint('Trimmed / Rejected')}`, show: (/** @type {any} */ d) => (d.trader.kind === 'benchmark' ? html`<span class="text-fg-faint">—</span>` : cut(d.cuts)) },
 ]
 
 /** What a Track's Traders get, in a few words. @param {any} k */
 const conditions = (k) => `${k.briefingPack === 'prices_only' ? 'Prices only' : 'Full briefing pack'}${k.webSearch === 'native' ? ", each model's own web search" : k.webSearch === 'shared' ? ', shared web search' : ', no web search'}`
-
-// "3 / 1": orders the Compliance Desk trimmed, then those it rejected; zeros fade (as in Standings).
-/** @param {any} r */
-const cut = (r) => {
-  const n = (/** @type {number} */ v) => html`<span class="${v ? '' : 'text-fg-faint'}">${v}</span>`
-  return html`${n(r.trimmed)} / ${n(r.rejected)}`
-}
 
 /** Rows of the Track vs Track table. */
 const TRACK_ROWS = [
