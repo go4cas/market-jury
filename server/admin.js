@@ -225,7 +225,7 @@ export function adminRoutes(ctx) {
           traders: db.query(`SELECT t.id, t.name, t.kind, t.cadence, t.colour_slot, t.status, t.started_on, t.retired_on, m.provider, m.model_version, m.effort,
                                k.slug AS track, k.title AS track_title,
                                (SELECT COUNT(*) FROM positions p WHERE p.trader_id = t.id AND p.quantity_micro > 0) AS positions
-                             FROM traders t LEFT JOIN models m ON m.id = t.model_id LEFT JOIN tracks k ON k.id = t.track_id ORDER BY t.kind = 'benchmark', t.track_id, t.id`).all(),
+                             FROM traders t LEFT JOIN models m ON m.id = t.model_id LEFT JOIN tracks k ON k.id = t.track_id ORDER BY t.kind = 'benchmark', t.id`).all(),
         })
       }),
       POST: guarded(async (req) => {

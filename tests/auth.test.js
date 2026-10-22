@@ -6,11 +6,13 @@ const PASSWORD = 'correct horse battery staple'
 
 /** @type {ReturnType<typeof testServer>} */
 let t
-let clock = 1_790_000_000_000
+// Start from the real time: sessions are checked against the real clock, so a
+// fixed date here would make every session expire once it is a month old.
+let clock = Date.now()
 let secret = ''
 
 beforeEach(async () => {
-  clock = 1_790_000_000_000
+  clock = Date.now()
   t = testServer({ now: () => clock })
   secret = newTotpSecret()
   t.db.run('INSERT INTO trade_master (id, password_hash, totp_secret, updated_at) VALUES (1, ?, ?, ?)', [
