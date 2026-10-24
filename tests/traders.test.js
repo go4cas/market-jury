@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { APICallError } from 'ai'
 import { retryDelay } from '../agents/call.js'
 import { budget, mayRun } from '../agents/budget.js'
-import { writeColumn } from '../agents/columnist.js'
+import { columnistData, writeColumn } from '../agents/columnist.js'
 import { costOf, ensureColumnistModels, languageModel, modelRow } from '../agents/models.js'
 import { answerSchema, runTrader, traderBriefing } from '../agents/trader.js'
 import { closeOfDay } from '../core/metrics.js'
@@ -161,6 +161,12 @@ describe('a Trader run, guarded', () => {
     expect(db.query('SELECT status FROM runs').get()).toEqual({ status: 'failed' })
   })
 
+  test('max_buy_usd is rounded down, so an order for exactly that amount is not trimmed', () => {
+    // $1,000.037 makes the 20% cap $200.0074: shown as $200.00, not $200.01.
+    const odd = aTrader(db, { name: 'Odd daily', cash: 1000.037 })
+    expect(traderBriefing(db, odd, MON).portfolio.max_buy_usd).toBe(200)
+  })
+
   test('a briefing for a past evening shows the books of that evening, not later fills', async () => {
     await run(mockModel([answer()]))
     const mon = traderBriefing(db, 1, MON)
@@ -233,6 +239,21 @@ describe('the Market Columnist', () => {
     expect(claude).not.toHaveProperty('change_pct')
     const tuesday = claude.decisions.find((/** @type {any} */ d) => d.date === TUE)
     expect(tuesday.orders.map((/** @type {any} */ o) => o.status)).toContain('queued for the next open, not bought or sold yet')
+    // Tonight's orders (AAPL is already at the cap, so only SPY queues), listed apart with the open they wait for.
+    expect(record.facts.queued_not_filled_yet.map((/** @type {any} */ o) => [o.trader, o.ticker, o.fills_at_open_on])).toEqual([['Claude daily', 'SPY', '2026-11-04']])
+    expect(record.facts.note).toContain('is allowed and is not counted')
+  })
+
+  test('counts how many Traders did better than The Index', () => {
+    const index = anIndex(db, { startedOn: MON })
+    const gpt = aTrader(db, { name: 'GPT daily' })
+    const snap = db.prepare('INSERT INTO snapshots (trader_id, trading_date, cash_micro, holdings_micro, total_micro) VALUES (?, ?, 0, 0, ?)')
+    // The Index fell 0.5%; Claude fell less (better), GPT fell more (worse).
+    for (const [id, mon, tue] of [[1, 1000, 999], [gpt, 1000, 990], [index, 1000, 995]]) {
+      snap.run(id, MON, toMicro(mon))
+      snap.run(id, TUE, toMicro(tue))
+    }
+    expect(columnistData(db, TUE, TUE).facts.summary).toContain('1 of 2 AI Traders did better than The Index on 2026-11-03.')
   })
 
   test('says so when no model is set', async () => {

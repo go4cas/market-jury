@@ -110,7 +110,8 @@ export function traderBriefing(db, traderId, date) {
   const rules = rulesFor(db, traderId, date)
   const capMicro = mulDiv(v.total, Math.round(rules.position_cap_pct * 100), 10_000)
   const spendable = v.cash - rules.per_trade_cost_micro
-  const maxBuy = (/** @type {number} */ heldMicro) => dollars(Math.max(0, Math.min(capMicro - heldMicro, spendable)))
+  // Rounded down to the cent: an order for exactly max_buy_usd always fits.
+  const maxBuy = (/** @type {number} */ heldMicro) => Math.floor(Math.max(0, Math.min(capMicro - heldMicro, spendable)) / 10_000) / 100
   const portfolio = {
     date,
     total_value_usd: dollars(v.total),

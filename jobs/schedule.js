@@ -158,7 +158,8 @@ export const STEPS = /** @type {Step[]} */ ([
       if (problems.length) throw new Error(`The books don't balance: ${problems.join(' ')}`)
       closeOfDay(db, date)
       awardBadgesAtClose(db, date)
-      return null
+      // Kept on the step so the weekly review sees when news was cut short.
+      return r.newsCapped ? `News was capped in ${r.newsCapped} ${r.newsCapped === 1 ? 'hour' : 'hours'}: some headlines from ${r.newsCapped === 1 ? 'that hour' : 'those hours'} were not stored.` : null
     },
   },
   { name: 'daily-traders', due: floorRunnerDue, after: ['floor-runner'], trading: true, run: (ctx, date) => runTraders(ctx, date, 'daily') },

@@ -69,13 +69,13 @@ describe('migrations', () => {
     expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE effective_on = '2026-10-19'").get()).toEqual({ n: 5 })
   })
 
-  test('the 2 Nov weekend batch logs its headline change only for an experiment already running', () => {
-    const batch = readFileSync(new URL('../db/migrations/0011_weekend_batch_2026_11_02.sql', import.meta.url), 'utf8')
+  test('the 26 Oct weekend batch logs its changes only for an experiment already running', () => {
+    const batch = readFileSync(new URL('../db/migrations/0011_weekend_batch_2026_10_26.sql', import.meta.url), 'utf8')
     const db = openDb(':memory:')
     migrate(db)
-    expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE effective_on = '2026-11-02'").get()).toEqual({ n: 0 })
+    expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE effective_on = '2026-10-26'").get()).toEqual({ n: 0 })
     db.run("UPDATE settings SET start_date = '2026-10-05' WHERE id = 1")
     db.run(batch)
-    expect(db.query("SELECT area, pr_number FROM platform_changes WHERE effective_on = '2026-11-02'").all()).toEqual([{ area: 'Briefing pack', pr_number: 44 }])
+    expect(db.query("SELECT area, pr_number FROM platform_changes WHERE effective_on = '2026-10-26'").all()).toEqual([{ area: 'Briefing pack', pr_number: 44 }, { area: 'Briefing pack', pr_number: 44 }, { area: 'Prompt', pr_number: 44 }])
   })
 })
