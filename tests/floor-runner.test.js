@@ -50,6 +50,19 @@ describe('Floor Runner', () => {
     expect(db.query("SELECT kind, split_from, split_to FROM corporate_actions WHERE kind = 'split'").get()).toEqual({ kind: 'split', split_from: 1, split_to: 4 })
   })
 
+  test('a busy afternoon does not push out the night\'s and the morning\'s news', async () => {
+    // Twelve stories in the last hour before the close, one overnight and one at the open.
+    for (let i = 0; i < 12; i++) market.news.push({ id: 500 + i, headline: `Late story ${i}`, summary: '', source: 'benzinga', url: '', created_at: `2026-11-24T20:${String(10 + i).padStart(2, '0')}:00Z`, symbols: ['AAPL'] })
+    market.news.push({ id: 600, headline: 'Overnight story', summary: '', source: 'benzinga', url: '', created_at: '2026-11-24T03:30:00Z', symbols: ['AAPL'] })
+    const result = await runFloorRunner({ db, alpaca: alpacaFor(market), date: '2026-11-24', menu: TEST_MENU, now: () => new Date('2026-11-24T23:00:00Z'), newsMaxPerHour: 5 })
+    const stored = (/** @type {string} */ id) => db.query('SELECT 1 FROM news_items WHERE external_id = ?').get(id) !== null
+    expect(stored('600')).toBe(true)
+    expect(stored('102')).toBe(true)
+    // The busy hour keeps its newest five and says so.
+    expect(db.query("SELECT COUNT(*) AS n FROM news_items WHERE headline LIKE 'Late story%'").get()).toEqual({ n: 5 })
+    expect(result.newsCapped).toBe(1)
+  })
+
   test('builds a daily pack with prices and 1-week, 1-month and 3-month changes', async () => {
     const result = await run('2026-11-24')
     expect(result.daily).toBeNumber()
