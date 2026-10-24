@@ -10,7 +10,7 @@ export const meta = { layout: 'app', title: 'About this site · Market Jury' }
 // Where data goes, in plain words: what visitors leave behind, what the AI
 // providers are sent, and how long backups are kept. Keep it true to the code
 // (server/auth.js cookie, uiState/Disclosure localStorage, agents/ prompts,
-// scripts/backup.js KEEP_DAYS) when any of those change.
+// scripts/backup.js KEEP_DAYS, server/review.js export) when any of those change.
 const SECTIONS = [
   {
     title: 'When you visit',
@@ -36,6 +36,7 @@ const SECTIONS = [
     items: [
       'Every price, decision and trade is kept for good, so the history stays honest.',
       'A copy of the database is backed up each night, and each copy is deleted after 30 days.',
+      'Once a week the trading record (prices, decisions, trades, model calls and costs, never sign-in details) is read through a private address for a review of how the platform is running. Only a secret key the Trade Master holds opens it.',
     ],
   },
 ]
