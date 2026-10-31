@@ -50,6 +50,16 @@ jobs:
           printf '%s\n' "$VPS_SSH_KEY" > ~/.ssh/deploy_key
           chmod 600 ~/.ssh/deploy_key
           id="$(date -u +%Y%m%dT%H%M%SZ)-${GITHUB_SHA::7}"
-          ssh -i ~/.ssh/deploy_key -o BatchMode=yes "deploy@$VPS_HOST" \
-            "set -e; d=/srv/market-jury/releases/$id; mkdir \$d; tar -xz -C \$d; bash \$d/deploy/activate.sh" \
-            < release.tar.gz
+          # The path to the VPS sometimes times out for a moment, so a connection failure (ssh's
+          # exit code 255) is tried again, up to 3 times 30s apart. A failure on the server itself
+          # (a bad release, a failed health check) stops the deploy straight away.
+          for try in 1 2 3; do
+            status=0
+            ssh -i ~/.ssh/deploy_key -o BatchMode=yes -o ConnectTimeout=20 "deploy@$VPS_HOST" \
+              "set -e; d=/srv/market-jury/releases/$id; mkdir -p \$d; tar -xz -C \$d; bash \$d/deploy/activate.sh" \
+              < release.tar.gz || status=$?
+            if [ "$status" -ne 255 ]; then exit "$status"; fi
+            if [ "$try" -lt 3 ]; then echo "Could not reach the VPS (try $try of 3), trying again in 30s."; sleep 30; fi
+          done
+          echo "Could not reach the VPS after 3 tries."
+          exit 255

@@ -13,7 +13,10 @@ import defaultMenu from '../market/stock-menu.json'
 export const CALENDAR_END = '2029-12-31'
 const HISTORY_TRADING_DAYS = 63 // the 3-month change
 const CORPORATE_ACTIONS_AHEAD_DAYS = 45
-const NEWS_MAX = 1000
+// Headlines are fetched an hour at a time, each hour with its own cap, so a
+// busy afternoon can't push the night's and the morning's news out.
+const NEWS_PIECE_MS = 3_600_000
+const NEWS_MAX_PER_PIECE = 1000
 
 /** @param {string} date @param {number} days */
 const addDays = (date, days) => {
@@ -29,9 +32,10 @@ const addDays = (date, days) => {
  * @param {string} options.date the trading day to collect (New York date)
  * @param {StockMenu} [options.menu] the default menu, loaded on the very first run
  * @param {() => Date} [options.now]
- * @returns {Promise<{ daily: number | null, weekly: number | null, skipped?: string }>}
+ * @param {number} [options.newsMaxPerHour] headlines kept per hour of the window
+ * @returns {Promise<{ daily: number | null, weekly: number | null, skipped?: string, newsCapped?: number }>}
  */
-export async function runFloorRunner({ db, alpaca, date, menu = defaultMenu, now = () => new Date() }) {
+export async function runFloorRunner({ db, alpaca, date, menu = defaultMenu, now = () => new Date(), newsMaxPerHour = NEWS_MAX_PER_PIECE }) {
   ensureStockMenu(db, menu, date)
 
   // The calendar: fetch once, far enough back for three months of history and forward to 2029.
@@ -58,7 +62,12 @@ export async function runFloorRunner({ db, alpaca, date, menu = defaultMenu, now
   const previous = previousTradingDay(db, date)
   const close = /** @type {Date} */ (closeInstant(db, date))
   const newsFrom = previous ? /** @type {Date} */ (closeInstant(db, previous)) : new Date(close.getTime() - 86_400_000)
-  saveNews(db, await alpaca.news(newsFrom, close, { max: NEWS_MAX }))
+  let newsCapped = 0
+  for (let start = newsFrom.getTime(); start < close.getTime(); start += NEWS_PIECE_MS) {
+    const items = await alpaca.news(new Date(start), new Date(Math.min(start + NEWS_PIECE_MS, close.getTime())), { max: newsMaxPerHour })
+    if (items.length >= newsMaxPerHour) newsCapped++
+    saveNews(db, items)
+  }
 
   // Splits and dividends from the past week to the coming weeks (announced ones).
   saveCorporateActions(db, await alpaca.corporateActions(tickers, addDays(date, -7), addDays(date, CORPORATE_ACTIONS_AHEAD_DAYS)))
@@ -66,7 +75,7 @@ export async function runFloorRunner({ db, alpaca, date, menu = defaultMenu, now
   const { stock_menu_version: menuVersion } = /** @type {{ stock_menu_version: string | null }} */ (db.query('SELECT stock_menu_version FROM settings WHERE id = 1').get())
   const context = { menuVersion, now: now() }
   const daily = savePack(db, buildDailyPack(db, date, context))
-  return { daily, weekly: weekly ? savePack(db, buildWeeklyPack(db, date, context)) : null }
+  return { daily, weekly: weekly ? savePack(db, buildWeeklyPack(db, date, context)) : null, ...(newsCapped && { newsCapped }) }
 }
 
 /** @param {Database} db @param {string} kind @param {string} date */

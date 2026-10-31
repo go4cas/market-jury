@@ -3,7 +3,7 @@
 // saved so any decision can be replayed against exactly what was seen.
 import { createHash } from 'node:crypto'
 import { fromMicro, percentChange } from '../core/money.js'
-import { closeInstant, firstTradingDayOfWeek, previousTradingDay, tradingDaysBack } from '../core/calendar.js'
+import { closeInstant, firstTradingDayOfWeek, openInstant, previousTradingDay, tradingDaysBack } from '../core/calendar.js'
 import { PARTIAL_BAR, trackedInstruments } from './store.js'
 
 /** @typedef {import('bun:sqlite').Database} Database */
@@ -45,8 +45,9 @@ function adjustedClose(db, instrumentId, pastDate, asOf) {
 // news; analyst rating notes on companies off the menu are dropped.
 const BROAD_MARKET = /\b(stocks?|market|markets|S&P|Dow|Nasdaq|Wall Street|Fed|Federal Reserve|inflation|CPI|PPI|payrolls?|jobs report|unemployment|Treasury|Treasuries|yields?|interest rates?|rate (cut|hike)s?|GDP|recession|economy|economic|tariffs?|oil|crude|dollar|earnings season|futures)\b/i
 const RATING_NOTE = /\b(price target|maintains|reiterates|initiates|upgrades?|downgrades?|overweight|underweight|outperform|underperform|rating)\b/i
-const HEADLINE_SLICES = { daily: 4, weekly: 7 }
 const PER_TICKER = { daily: 3, weekly: 4 }
+/** At most this many analyst rating notes (price targets, upgrades) on menu stocks per pack. */
+const RATING_NOTES = { daily: 4, weekly: 8 }
 
 /**
  * @typedef {object} Headline
@@ -59,34 +60,50 @@ const PER_TICKER = { daily: 3, weekly: 4 }
 
 /**
  * Choose headlines instead of taking the newest: keep what matters, spread the
- * picks over the window (each time slice gets a share, unused shares go to the
- * newest leftovers), and cap how many any one ticker gets. Newest first.
+ * picks over the window's slices in turns (newest slice first, the newest
+ * candidate in each), so a quiet slice's unused share goes to the other slices
+ * rather than to the last hour. One ticker gets at most `perTicker`, and
+ * analyst rating notes at most `ratingNotes`. Newest first.
+ * The slices are the window cut at `cuts` (times between after and until), or
+ * `slices` equal parts when there are no cuts.
  * @param {Headline[]} candidates
- * @param {{ after: Date, until: Date, limit: number, slices: number, perTicker: number }} o
+ * @param {{ after: Date, until: Date, limit: number, perTicker: number, slices?: number, cuts?: Date[], ratingNotes?: number }} o
  * @returns {Headline[]}
  */
-export function pickHeadlines(candidates, { after, until, limit, slices, perTicker }) {
+export function pickHeadlines(candidates, { after, until, limit, perTicker, slices = 1, cuts, ratingNotes = Infinity }) {
   const relevant = candidates
     .filter((h) => h.tickers.length > 0 || (BROAD_MARKET.test(h.headline) && !RATING_NOTE.test(h.headline)))
     .sort((a, b) => b.publishedAt.localeCompare(a.publishedAt) || b.id - a.id)
   const span = until.getTime() - after.getTime()
-  const sliceOf = (/** @type {Headline} */ h) => Math.min(slices - 1, Math.max(0, Math.floor(((Date.parse(h.publishedAt) - after.getTime()) / span) * slices)))
+  const edges = (cuts ?? Array.from({ length: slices - 1 }, (_, i) => new Date(after.getTime() + (span * (i + 1)) / slices)))
+    .map((d) => d.getTime()).filter((t) => t > after.getTime() && t < until.getTime()).sort((a, b) => a - b)
+  /** @type {Headline[][]} newest slice first, newest headline first within each */
+  const queues = Array.from({ length: edges.length + 1 }, () => [])
+  for (const h of relevant) {
+    const at = Date.parse(h.publishedAt)
+    queues[edges.length - edges.filter((e) => at >= e).length].push(h)
+  }
   /** @type {Map<string, number>} */
   const perTickerCount = new Map()
   /** @type {Set<number>} */
   const chosen = new Set()
+  let ratings = 0
   const take = (/** @type {Headline} */ h) => {
-    if (chosen.size >= limit || chosen.has(h.id) || h.tickers.some((t) => (perTickerCount.get(t) ?? 0) >= perTicker)) return false
+    const rating = RATING_NOTE.test(h.headline)
+    if (rating && ratings >= ratingNotes) return false
+    if (h.tickers.some((t) => (perTickerCount.get(t) ?? 0) >= perTicker)) return false
     chosen.add(h.id)
+    if (rating) ratings++
     for (const t of h.tickers) perTickerCount.set(t, (perTickerCount.get(t) ?? 0) + 1)
     return true
   }
-  const share = Math.ceil(limit / slices)
-  for (let s = slices - 1; s >= 0; s--) {
-    let taken = 0
-    for (const h of relevant) if (taken < share && sliceOf(h) === s && take(h)) taken++
+  // Take turns across the slices until the pack is full or every slice has run dry.
+  while (chosen.size < limit && queues.some((q) => q.length)) {
+    for (const q of queues) {
+      if (chosen.size >= limit) break
+      for (let h = q.shift(); h; h = q.shift()) if (take(h)) break
+    }
   }
-  for (const h of relevant) take(h)
   return relevant.filter((h) => chosen.has(h.id))
 }
 
@@ -97,9 +114,10 @@ export function pickHeadlines(candidates, { after, until, limit, slices, perTick
  * @param {Date} until
  * @param {'daily' | 'weekly'} kind
  * @param {number} limit
+ * @param {Date[]} cuts where the window's slices meet
  * @returns {Headline[]}
  */
-function headlines(db, after, until, kind, limit) {
+function headlines(db, after, until, kind, limit, cuts) {
   const rows = /** @type {Array<{ id: number, headline: string, source: string, published_at: string, tickers: string | null }>} */ (
     db.query(`SELECT n.id, n.headline, n.source, n.published_at, group_concat(i.ticker) AS tickers
               FROM news_items n
@@ -115,7 +133,38 @@ function headlines(db, after, until, kind, limit) {
     tickers: r.tickers ? r.tickers.split(',').sort() : [],
     headline: r.headline,
   }))
-  return pickHeadlines(candidates, { after, until, limit, slices: HEADLINE_SLICES[kind], perTicker: PER_TICKER[kind] })
+  return pickHeadlines(candidates, { after, until, limit, cuts, perTicker: PER_TICKER[kind], ratingNotes: RATING_NOTES[kind] })
+}
+
+/**
+ * A day's headline slices: overnight and pre-open up to the open, then the
+ * session in three equal parts.
+ * @param {Database} db
+ * @param {string} date
+ * @param {Date} close
+ */
+function sessionCuts(db, date, close) {
+  const open = openInstant(db, date)
+  if (!open) return []
+  const third = (close.getTime() - open.getTime()) / 3
+  return [open, new Date(open.getTime() + third), new Date(open.getTime() + 2 * third)]
+}
+
+/**
+ * A week's headline slices: one per trading day, close to close.
+ * @param {Database} db
+ * @param {Date} after
+ * @param {Date} close
+ */
+function dayCuts(db, after, close) {
+  const days = db.query("SELECT date FROM trading_days WHERE calendar = 'XNYS' AND date BETWEEN ? AND ? ORDER BY date").values(after.toISOString().slice(0, 10), close.toISOString().slice(0, 10))
+  /** @type {Date[]} */
+  const cuts = []
+  for (const [d] of days) {
+    const c = closeInstant(db, String(d))
+    if (c && c > after && c < close) cuts.push(c)
+  }
+  return cuts
 }
 
 /** @param {number} micro */
@@ -220,7 +269,7 @@ export function buildDailyPack(db, date, { menuVersion, now }) {
     market: marketSummary(rows, COLUMNS, COLUMNS.indexOf('chg_1d')),
     prices: { columns: COLUMNS, rows },
     missing,
-    headlines: headlines(db, after, close, 'daily', DAILY_HEADLINES),
+    headlines: headlines(db, after, close, 'daily', DAILY_HEADLINES, sessionCuts(db, date, close)),
   }
 }
 
@@ -254,7 +303,7 @@ export function buildWeeklyPack(db, date, { menuVersion, now }) {
     market: marketSummary(rows, columns, weekColumn),
     prices: { columns, rows },
     missing,
-    headlines: headlines(db, after, close, 'weekly', WEEKLY_HEADLINES),
+    headlines: headlines(db, after, close, 'weekly', WEEKLY_HEADLINES, dayCuts(db, after, close)),
   }
 }
 
