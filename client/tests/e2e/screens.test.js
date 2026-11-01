@@ -285,6 +285,9 @@ test('The cast explains who does what, with the live line-up linked to each Trad
   // The icons are drawn as real SVG shapes, so they take up room on the page.
   const shape = await page.getByRole('main').locator('svg path').first().boundingBox()
   expect(shape?.width).toBeGreaterThan(0)
+  // The Traders come in one group per track, each naming its conditions.
+  await expect(page.locator('#traders h3')).toHaveText(['Daily track', 'Weekly track'])
+  await expect(page.getByRole('region', { name: 'Weekly track' })).toContainText('Once a week · full briefing pack · no web search')
   await page.locator('#traders').getByRole('link', { name: /Claude · Daily/ }).click()
   await expect(page.getByRole('heading', { name: 'Claude · Daily', level: 1 })).toBeVisible()
 })
@@ -399,7 +402,8 @@ test('on a phone: Retire stays beside each Trader, cast names sit beside their i
   }
 
   await page.goto('/cast')
-  for (const card of await page.locator('article', { has: page.locator('h3') }).all()) {
+  // The persona cards (The Traders card's h3s are its track groups, with no icon).
+  for (const card of await page.locator('article:not(#traders)', { has: page.locator('h3') }).all()) {
     const icon = await card.locator('svg').first().boundingBox()
     const title = await card.locator('h3').boundingBox()
     expect(icon && title && Math.abs((icon.y + icon.height / 2) - (title.y + title.height / 2)) < 12).toBe(true)
