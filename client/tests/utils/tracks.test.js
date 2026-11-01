@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { differences } from '../../src/utils/tracks.js'
+import { conditionsLine, differences } from '../../src/utils/tracks.js'
 
 const weekly = { title: 'Weekly', cadence: 'weekly', webSearch: 'off', briefingPack: 'full' }
 
@@ -19,5 +19,12 @@ describe('differences between two Tracks', () => {
     expect(differences(daily, { ...weekly, webSearch: 'native' })).toBe(
       "Weekly decides once a week; Daily every trading day. Weekly uses each model's own web search; Daily uses one shared search tool. Daily gets prices only, no headlines; Weekly gets the full briefing pack.",
     )
+  })
+})
+
+describe("a Track's conditions line", () => {
+  it('names all three conditions, search included when it is off', () => {
+    expect(conditionsLine({ ...weekly, webSearch: 'native', searchesPerRun: 5 })).toBe("Once a week · full briefing pack · each model's own web search, up to 5 a run")
+    expect(conditionsLine({ ...weekly, cadence: 'daily', briefingPack: 'prices_only' })).toBe('Every trading day · prices only, no headlines · no web search')
   })
 })

@@ -6,6 +6,7 @@ import { PageHeader } from '../components/PageHeader.js'
 import { TraderMark } from '../components/TraderMark.js'
 import { displayName } from '../utils/traders.js'
 import { navigate } from '../utils/nav.js'
+import { conditionsLine } from '../utils/tracks.js'
 
 export const meta = { layout: 'app', title: 'The cast · Market Jury' }
 
@@ -68,9 +69,9 @@ function CastPage() {
       ${PageHeader({ eyebrow: 'Market Jury · who does what', title: 'The cast', intro: 'AI models trade virtual money. Everyone else here is plain code with a job title.' })}
       <article id="traders" class="${card}">
         <h2 class="${title}">The Traders</h2>
-        <p class="${text}">Each Trader is one AI model with its own virtual money, deciding every evening or once a week. Traders play in tracks, one Trader per model, and every Trader in a track plays by the same conditions. Each model's colour is theirs for life.</p>
+        <p class="${text}">Each Trader is one AI model with its own virtual money. Traders play in tracks, one Trader per model, and every Trader in a track plays by the same conditions. Each model's colour is theirs for life.</p>
         ${Loadable(traders, (r) => TraderList(r.traders.filter((/** @type {any} */ t) => t.kind === 'ai'), r.tracks ?? []))}
-        <p class="${when}">When · every trading day after the close</p>
+        <p class="${when}">When · after the close: daily tracks every trading day, weekly tracks on the week's last trading day</p>
       </article>
       <section class="flex flex-col gap-4" aria-labelledby="daily-cycle">
         <h2 id="daily-cycle" class="${rowTitle}">The daily cycle</h2>
@@ -84,27 +85,29 @@ function CastPage() {
   `
 }
 
-// Spelled out in full so Tailwind emits them: one row per track on a wide screen.
-const ROWS = ['lg:grid-rows-1', 'lg:grid-rows-2', 'lg:grid-rows-3', 'lg:grid-rows-4', 'lg:grid-rows-5', 'lg:grid-rows-6']
-
 /**
+ * The Traders, one group per Track (design system CastCard): the Track's title
+ * and its conditions, then its Traders in colour order. A new Track adds a
+ * group and a new model adds one Trader to each, so it grows either way.
  * @param {any[]} traders
- * @param {Array<{ slug: string, title: string }>} tracks
+ * @param {Array<{ slug: string, title: string, cadence: string, briefingPack: string, webSearch: string, searchesPerRun: number }>} tracks
  */
 function TraderList(traders, tracks) {
   if (!traders.length) {
     const names = tracks.length ? tracks.map((k) => k.title).join(' + ') : 'Daily + Weekly'
     return html`<ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">${MODELS.map((m) => html`<li class="flex items-center gap-2.5">${TraderMark({ ...m, kind: 'ai' })}<span class="flex flex-col"><span class="font-semibold text-fg">${m.name}</span><span class="prompt">${names}</span></span></li>`)}</ul>`
   }
-  const place = (/** @type {any} */ t) => { const i = tracks.findIndex((k) => k.slug === t.track); return i < 0 ? 99 : i }
-  const ordered = [...traders].sort((a, b) => (a.colourSlot ?? 99) - (b.colourSlot ?? 99) || place(a) - place(b) || a.id - b.id)
-  const rows = ROWS[Math.min(ROWS.length, Math.max(1, new Set(traders.map((t) => t.track)).size)) - 1]
-  return html`<ul class="${`grid gap-x-4 sm:grid-cols-2 lg:auto-cols-fr lg:grid-flow-col lg:grid-cols-none ${rows}`}">${ordered.map((t) => html`<li>
-    <a href="${`/traders/${t.id}`}" class="${`flex min-h-11 items-center gap-2.5 rounded-control hover:bg-surface-inset ${t.status === 'retired' ? 'opacity-50' : ''}`}" @click="${navigate(`/traders/${t.id}`)}">
-      ${TraderMark(t, { size: 'sm' })}
-      <span class="flex flex-col leading-tight"><span class="font-semibold text-fg">${displayName(t.name)}</span><span class="font-mono text-xs text-fg-soft">${t.modelVersion ?? ''}${t.status === 'retired' ? ' · retired' : ''}</span></span>
-    </a>
-  </li>`.key(t.id))}</ul>`
+  const inTrack = (/** @type {string} */ slug) => traders.filter((t) => t.track === slug).sort((a, b) => (a.colourSlot ?? 99) - (b.colourSlot ?? 99) || a.id - b.id)
+  return html`<div class="flex flex-col">${tracks.filter((k) => inTrack(k.slug).length).map((k, i) => html`<section class="${`flex flex-col gap-2 ${i ? 'mt-4 border-t border-line pt-4' : ''}`}" aria-label="${`${k.title} track`}">
+    <h3 class="prompt">${k.title} track</h3>
+    <p class="font-mono text-xs text-fg-soft">${conditionsLine(k)}</p>
+    <ul class="grid gap-x-4 sm:grid-cols-2 lg:grid-cols-4">${inTrack(k.slug).map((t) => html`<li>
+      <a href="${`/traders/${t.id}`}" class="${`flex min-h-11 items-center gap-2.5 rounded-control hover:bg-surface-inset ${t.status === 'retired' ? 'opacity-50' : ''}`}" @click="${navigate(`/traders/${t.id}`)}">
+        ${TraderMark(t, { size: 'sm' })}
+        <span class="flex flex-col leading-tight"><span class="font-semibold text-fg">${displayName(t.name)}</span><span class="font-mono text-xs text-fg-soft">${t.modelVersion ?? ''}</span>${t.status === 'retired' ? html`<span class="prompt">Retired</span>` : ''}</span>
+      </a>
+    </li>`.key(t.id))}</ul>
+  </section>`.key(k.slug))}</div>`
 }
 
 export default CastPage

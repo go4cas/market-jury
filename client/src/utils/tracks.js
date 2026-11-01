@@ -27,3 +27,15 @@ export const differences = (x, y) => {
   }
   return out.join(' ')
 }
+
+/**
+ * A Track's conditions in one line, all three named: "Once a week · full
+ * briefing pack · each model's own web search, up to 5 a run".
+ * @param {TrackConditions & { searchesPerRun?: number }} k
+ */
+export const conditionsLine = (k) => [
+  k.cadence === 'weekly' ? 'Once a week' : 'Every trading day',
+  k.briefingPack === 'prices_only' ? 'prices only, no headlines' : 'full briefing pack',
+  k.webSearch === 'native' ? `each model's own web search, up to ${k.searchesPerRun} a run`
+    : k.webSearch === 'shared' ? `one shared web search, up to ${k.searchesPerRun} a run` : 'no web search',
+].join(' · ')
