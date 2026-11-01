@@ -83,6 +83,20 @@ export function pickHeadlines(candidates, { after, until, limit, perTicker, slic
     const at = Date.parse(h.publishedAt)
     queues[edges.length - edges.filter((e) => at >= e).length].push(h)
   }
+  // Within a slice, spread the picks over its time span: split it into as many
+  // parts as the slice's share and take the newest of each part in turn, so the
+  // overnight slice covers the whole night, not the half hour before the open.
+  const share = Math.ceil(limit / queues.length)
+  const bounds = [after.getTime(), ...edges, until.getTime()]
+  queues.forEach((q, i) => {
+    const from = bounds[edges.length - i]
+    const width = (bounds[edges.length - i + 1] - from) / share
+    /** @type {Headline[][]} newest part first */
+    const parts = Array.from({ length: share }, () => [])
+    for (const h of q) parts[share - 1 - Math.min(share - 1, Math.floor((Date.parse(h.publishedAt) - from) / width))].push(h)
+    q.length = 0
+    for (let n = 0; parts.some((p) => p.length > n); n++) for (const p of parts) if (p[n]) q.push(p[n])
+  })
   /** @type {Map<string, number>} */
   const perTickerCount = new Map()
   /** @type {Set<number>} */

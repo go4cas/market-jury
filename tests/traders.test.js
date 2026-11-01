@@ -241,7 +241,9 @@ describe('the Market Columnist', () => {
     expect(tuesday.orders.map((/** @type {any} */ o) => o.status)).toContain('queued for the next open, not bought or sold yet')
     // Tonight's orders (AAPL is already at the cap, so only SPY queues), listed apart with the open they wait for.
     expect(record.facts.queued_not_filled_yet.map((/** @type {any} */ o) => [o.trader, o.ticker, o.fills_at_open_on])).toEqual([['Claude daily', 'SPY', '2026-11-04']])
-    expect(record.facts.note).toContain('is allowed and is not counted')
+    expect(record.facts.note).toContain('The position cap only limits new buys')
+    expect(record.facts.summary).toContain('(1 daily, 0 weekly): Claude daily.')
+    expect(record.facts.queued_not_filled_yet[0]).toHaveProperty('asked_usd')
   })
 
   test('counts how many Traders did better than The Index', () => {
