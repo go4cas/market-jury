@@ -27,6 +27,7 @@ const SECTIONS = [
     items: [
       'Each evening the Traders are sent the briefing pack: prices and news headlines that are public anyway.',
       'Each Trader is also sent its own virtual portfolio, its recent decisions and its journal. No personal details are in any of these.',
+      'Traders in a track that can search the web choose their own searches, up to a set number each run, so they don\'t all see the same news. The searches go to the model\'s own company, or to DeepSeek when a track shares one search tool. What they find is treated as untrusted reading, like the headlines.',
       'The Market Columnist is sent the Traders\' names, decisions and journals to write its reports.',
       'They go to the companies behind each model in the line-up (Anthropic, OpenAI, Google and DeepSeek in the starting line-up), under their API terms.',
     ],

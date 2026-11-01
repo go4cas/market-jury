@@ -35,8 +35,8 @@ function CostsPage() {
         const caption = `${month}: ${dollars(b.spentUsd)} spent, ${dollars(b.projectedUsd)} projected of ${dollars(b.ceilingUsd)} (${Math.round(b.ceilingUsd ? (b.projectedUsd / b.ceilingUsd) * 100 : 0)}%)`
         return html`
           ${b.level !== 'ok' ? Banner(b.level === 'over'
-            ? 'The projected spend has reached the budget ceiling. The weekly Traders and the daily recap are paused; the daily Traders and the weekly report keep running.'
-            : 'The projected spend is over 90% of the budget. At 100% the weekly Traders and the daily recap pause.') : ''}
+            ? 'The projected spend has reached the budget ceiling. The Traders who search the web, the weekly Traders and the daily recap are paused; the other daily Traders and the weekly report keep running.'
+            : 'The projected spend is over 90% of the budget. At 100% the Traders who search the web, the weekly Traders and the daily recap pause.') : ''}
           <dl class="grid grid-cols-3 gap-3">
             ${[[`Spent so far in ${month}`, b.spentUsd, `since 1 ${short}`], [`Projected for all of ${month}`, b.projectedUsd, "at today's pace"], ['Monthly budget', b.ceilingUsd, 'set in Settings']].map(([label, value, hint]) => html`<div class="rounded-panel border border-line bg-surface-raised p-3"><dt class="prompt">${label}</dt><dd class="font-mono text-lg text-fg">${dollars(Number(value))}</dd><dd class="text-xs text-fg-soft">${hint}</dd></div>`)}
           </dl>
@@ -54,11 +54,11 @@ function CostsPage() {
           </section>
           <section class="flex flex-col gap-2"><h2 class="font-display text-2xl font-semibold text-fg">By Trader</h2>
             ${c.byTrader.length ? html`<div class="-mx-4 overflow-x-auto px-4"><table class="w-full min-w-max border-collapse">
-              <thead><tr><th scope="col" class="${th}">Who</th><th scope="col" class="${th}">Model</th><th scope="col" class="${`${th} text-right`}">Calls</th><th scope="col" class="${`${th} text-right`}">Tokens in</th><th scope="col" class="${`${th} text-right`}">Tokens out</th><th scope="col" class="${`${th} text-right`}">Cost</th></tr></thead>
+              <thead><tr><th scope="col" class="${th}">Who</th><th scope="col" class="${th}">Model</th><th scope="col" class="${`${th} text-right`}">Calls</th><th scope="col" class="${`${th} text-right`}">Tokens in</th><th scope="col" class="${`${th} text-right`}">Tokens out</th><th scope="col" class="${`${th} text-right`}">Searches</th><th scope="col" class="${`${th} text-right`}">Cost</th></tr></thead>
               <tbody>${c.byTrader.map((/** @type {any} */ r) => html`<tr>
                 <td class="border-t border-line px-2 py-2.5 text-sm text-fg">${r.name}</td>
                 <td class="border-t border-line px-2 py-2.5 font-mono text-xs text-fg-soft">${r.model_version}</td>
-                <td class="${td}">${r.calls}</td><td class="${td}">${Number(r.tokens_in).toLocaleString('en-US')}</td><td class="${td}">${Number(r.tokens_out).toLocaleString('en-US')}</td><td class="${td}">${usd(r.cost_micro)}</td>
+                <td class="${td}">${r.calls}</td><td class="${td}">${Number(r.tokens_in).toLocaleString('en-US')}</td><td class="${td}">${Number(r.tokens_out).toLocaleString('en-US')}</td><td class="${td}">${Number(r.searches ?? 0).toLocaleString('en-US')}</td><td class="${td}">${usd(r.cost_micro)}</td>
               </tr>`)}</tbody></table></div>` : html`<p class="text-fg-soft">No model calls this month yet.</p>`}
           </section>
         `

@@ -1,8 +1,9 @@
 // The experiment's life: set up the line-up, rehearse with a dry run, start,
 // pause and resume. The Trade Master drives these from the admin screens.
-import { isTradingDay, marketDate, nextTradingDay, tradingDaysBetween } from '../core/calendar.js'
+import { isLastTradingDayOfWeek, isTradingDay, marketDate, nextTradingDay, tradingDaysBetween } from '../core/calendar.js'
 import { DEFAULT_RULES } from '../core/portfolio.js'
 import { createIndex, createTrader } from '../core/traders.js'
+import { checkNewTrack, describeTrack, modelLabel, slugFor, trackBySlug } from '../core/tracks.js'
 import { ensureColumnistModels, ensureModel, LINE_UP } from '../agents/models.js'
 import { runTrader } from '../agents/trader.js'
 import { saveCalendar } from '../market/store.js'
@@ -66,7 +67,8 @@ export function checkEndDate(db, value, now) {
     date,
     apply: () => {
       if (date === s.end_date) return
-      db.run('UPDATE settings SET end_date = ?, updated_at = ? WHERE id = 1', [date, now.toISOString()])
+      // The old date and when it moved: each Trader's next run says so.
+      db.run('UPDATE settings SET end_date = ?, end_date_previous = end_date, end_date_moved_at = ?, updated_at = ? WHERE id = 1', [date, now.toISOString(), now.toISOString()])
       db.run('INSERT INTO platform_changes (effective_on, area, summary, pr_number, created_at) VALUES (?, ?, ?, NULL, ?)',
         [firstDecisionDate(db, now) ?? date, 'Rules', `Last trading day moved to ${shortDay(date)} (day ${dayNumber(db, date)}).`, now.toISOString()])
     },
@@ -112,7 +114,8 @@ export function seedLineUp(db, now) {
     for (const t of LINE_UP.traders) {
       const modelId = ensureModel(db, t, now)
       for (const cadence of /** @type {const} */ (['daily', 'weekly'])) {
-        createTrader(db, { name: `${t.name} ${cadence}`, modelId, cadence, colourSlot: t.colourSlot, startedOn: null, asOf: marketDate(now), cashMicro: starting_cash_micro, rules, now })
+        const trackId = trackBySlug(db, cadence)?.id ?? null
+        createTrader(db, { name: `${t.name} ${cadence}`, modelId, cadence, trackId, colourSlot: t.colourSlot, startedOn: null, asOf: marketDate(now), cashMicro: starting_cash_micro, rules, now })
         created++
       }
     }
@@ -132,6 +135,78 @@ export function setStartingCash(db, cashMicro, now) {
     db.run('UPDATE settings SET starting_cash_micro = ?, updated_at = ? WHERE id = 1', [cashMicro, now.toISOString()])
     db.run("UPDATE cash_ledger SET amount_micro = ? WHERE kind = 'start' AND trader_id IN (SELECT id FROM traders WHERE started_on IS NULL)", [cashMicro])
   })()
+}
+
+/**
+ * The first evening a new Trader on a cadence decides: the first decision
+ * evening for a daily one, the last trading day of that week (or a later one)
+ * for a weekly one. null when the calendar doesn't reach that far.
+ * @param {Database} db
+ * @param {'daily' | 'weekly'} cadence
+ * @param {Date} now
+ */
+export function firstEveningFor(db, cadence, now) {
+  let date = firstDecisionDate(db, now)
+  if (cadence === 'daily') return date
+  while (date && !isLastTradingDayOfWeek(db, date)) date = nextTradingDay(db, date)
+  return date
+}
+
+/**
+ * Add a Track: one new Trader for each model in the line-up (the models of
+ * the active AI Traders), with fresh starting cash, joining on the Track's
+ * first evening. Its conditions are fixed from now on. Listed in the change
+ * log from that evening.
+ * @param {Database} db
+ * @param {Record<string, unknown>} input title, cadence, briefingPack, webSearch, searchesPerRun
+ * @param {Date} now
+ * @returns {{ id: number, slug: string, startedOn: string | null, traders: number }}
+ */
+export function createTrack(db, input, now) {
+  const t = checkNewTrack(input)
+  const s = settings(db)
+  if (s.experiment_state === 'ended') throw new Error('The experiment has ended.')
+  const slug = slugFor(t.cadence, t.title)
+  if (trackBySlug(db, slug)) throw new Error(`There is already a track called "${t.title}". Give this one another title.`)
+  const models = /** @type {Array<{ model_id: number, colour_slot: number | null, name: string }>} */ (
+    db.query(`SELECT model_id, MIN(colour_slot) AS colour_slot, MIN(name) AS name FROM traders
+              WHERE kind = 'ai' AND status = 'active' GROUP BY model_id ORDER BY MIN(colour_slot), MIN(id)`).all()
+  )
+  if (!models.length) throw new Error('There are no active Traders to take the models from.')
+  const startedOn = s.experiment_state === 'setup' ? null : firstEveningFor(db, t.cadence, now)
+  if (s.experiment_state !== 'setup' && !startedOn) throw new Error('The market calendar has no next trading day loaded.')
+  const words = slug.split('-').join(' ')
+  const names = models.map((m) => `${modelLabel(m.name)} ${words}`)
+  const taken = names.find((n) => db.query('SELECT 1 FROM traders WHERE name = ?').get(n))
+  if (taken) throw new Error(`There is already a Trader called "${taken}". Give the track another title.`)
+  const rules = defaultRules(db)
+  const row = { cadence: t.cadence, briefing_pack: t.briefingPack, web_search: t.webSearch, searches_per_run: t.searchesPerRun }
+  return db.transaction(() => {
+    const { id } = /** @type {{ id: number }} */ (
+      db.query(`INSERT INTO tracks (slug, title, cadence, briefing_pack, web_search, searches_per_run, started_on, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?) RETURNING id`).get(slug, t.title, t.cadence, t.briefingPack, t.webSearch, t.searchesPerRun, startedOn, now.toISOString())
+    )
+    models.forEach((m, i) => createTrader(db, {
+      name: names[i], modelId: m.model_id, cadence: t.cadence, trackId: id, colourSlot: m.colour_slot,
+      startedOn, asOf: startedOn ?? marketDate(now), cashMicro: s.starting_cash_micro, rules, now,
+    }))
+    if (startedOn) {
+      db.run('INSERT INTO platform_changes (effective_on, area, summary, pr_number, created_at) VALUES (?, ?, ?, NULL, ?)',
+        [startedOn, 'Tracks', `New track "${t.title}" starts with one Trader per model and fresh starting cash. It ${describeTrack(row)}. The other Traders are unchanged.`, now.toISOString()])
+    }
+    return { id, slug, startedOn, traders: models.length }
+  })()
+}
+
+/**
+ * Rename a Track. The title is for readers only: the Traders never see it.
+ * @param {Database} db
+ * @param {number} id
+ * @param {string} title already checked
+ */
+export function renameTrack(db, id, title) {
+  const r = db.run('UPDATE tracks SET title = ? WHERE id = ?', [title, id])
+  if (!r.changes) throw new Error('There is no track with that id.')
 }
 
 /**
@@ -161,6 +236,7 @@ export function startExperiment(db, { now, date }) {
   seedLineUp(db, now)
   db.transaction(() => {
     db.run("UPDATE traders SET started_on = ? WHERE kind = 'ai' AND started_on IS NULL AND status = 'active'", [startDate])
+    db.run('UPDATE tracks SET started_on = ? WHERE started_on IS NULL', [startDate])
     createIndex(db, { startedOn: dayOne, cashMicro: s.starting_cash_micro, now })
     db.run("UPDATE settings SET experiment_state = 'running', start_date = ?, end_date = ?, updated_at = ? WHERE id = 1", [startDate, lastDayFor(db, startDate), now.toISOString()])
   })()

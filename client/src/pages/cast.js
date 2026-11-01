@@ -68,8 +68,8 @@ function CastPage() {
       ${PageHeader({ eyebrow: 'Market Jury · who does what', title: 'The cast', intro: 'AI models trade virtual money. Everyone else here is plain code with a job title.' })}
       <article id="traders" class="${card}">
         <h2 class="${title}">The Traders</h2>
-        <p class="${text}">Each Trader is one AI model with its own virtual money, deciding every evening or once a week. Each colour is theirs for life.</p>
-        ${Loadable(traders, (r) => TraderList(r.traders.filter((/** @type {any} */ t) => t.kind === 'ai')))}
+        <p class="${text}">Each Trader is one AI model with its own virtual money, deciding every evening or once a week. Traders play in tracks, one Trader per model, and every Trader in a track plays by the same conditions. Each model's colour is theirs for life.</p>
+        ${Loadable(traders, (r) => TraderList(r.traders.filter((/** @type {any} */ t) => t.kind === 'ai'), r.tracks ?? []))}
         <p class="${when}">When · every trading day after the close</p>
       </article>
       <section class="flex flex-col gap-4" aria-labelledby="daily-cycle">
@@ -84,13 +84,22 @@ function CastPage() {
   `
 }
 
-/** @param {any[]} traders */
-function TraderList(traders) {
+// Spelled out in full so Tailwind emits them: one row per track on a wide screen.
+const ROWS = ['lg:grid-rows-1', 'lg:grid-rows-2', 'lg:grid-rows-3', 'lg:grid-rows-4', 'lg:grid-rows-5', 'lg:grid-rows-6']
+
+/**
+ * @param {any[]} traders
+ * @param {Array<{ slug: string, title: string }>} tracks
+ */
+function TraderList(traders, tracks) {
   if (!traders.length) {
-    return html`<ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">${MODELS.map((m) => html`<li class="flex items-center gap-2.5">${TraderMark({ ...m, kind: 'ai' })}<span class="flex flex-col"><span class="font-semibold text-fg">${m.name}</span><span class="prompt">Daily + Weekly</span></span></li>`)}</ul>`
+    const names = tracks.length ? tracks.map((k) => k.title).join(' + ') : 'Daily + Weekly'
+    return html`<ul class="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">${MODELS.map((m) => html`<li class="flex items-center gap-2.5">${TraderMark({ ...m, kind: 'ai' })}<span class="flex flex-col"><span class="font-semibold text-fg">${m.name}</span><span class="prompt">${names}</span></span></li>`)}</ul>`
   }
-  const ordered = [...traders].sort((a, b) => (a.colourSlot ?? 99) - (b.colourSlot ?? 99) || Number(/weekly/i.test(a.name)) - Number(/weekly/i.test(b.name)) || a.id - b.id)
-  return html`<ul class="grid gap-x-4 sm:grid-cols-2 lg:auto-cols-fr lg:grid-flow-col lg:grid-cols-none lg:grid-rows-2">${ordered.map((t) => html`<li>
+  const place = (/** @type {any} */ t) => { const i = tracks.findIndex((k) => k.slug === t.track); return i < 0 ? 99 : i }
+  const ordered = [...traders].sort((a, b) => (a.colourSlot ?? 99) - (b.colourSlot ?? 99) || place(a) - place(b) || a.id - b.id)
+  const rows = ROWS[Math.min(ROWS.length, Math.max(1, new Set(traders.map((t) => t.track)).size)) - 1]
+  return html`<ul class="${`grid gap-x-4 sm:grid-cols-2 lg:auto-cols-fr lg:grid-flow-col lg:grid-cols-none ${rows}`}">${ordered.map((t) => html`<li>
     <a href="${`/traders/${t.id}`}" class="${`flex min-h-11 items-center gap-2.5 rounded-control hover:bg-surface-inset ${t.status === 'retired' ? 'opacity-50' : ''}`}" @click="${navigate(`/traders/${t.id}`)}">
       ${TraderMark(t, { size: 'sm' })}
       <span class="flex flex-col leading-tight"><span class="font-semibold text-fg">${displayName(t.name)}</span><span class="font-mono text-xs text-fg-soft">${t.modelVersion ?? ''}${t.status === 'retired' ? ' · retired' : ''}</span></span>

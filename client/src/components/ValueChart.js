@@ -15,8 +15,16 @@ let nextId = 0
  * @property {string} kind
  * @property {number | null} colourSlot
  * @property {(number | null)[]} values micro-dollars, one per date (null: not taking part yet)
- * @property {boolean} [dotted] the weekly track of a model in Compare
+ * @property {boolean} [dotted] the second Track of a model in Compare (same as style 'dotted')
+ * @property {'solid' | 'dotted' | 'dashdot'} [style] how a Track's line is drawn in Compare (see lineStyleOf)
+ * @property {string} [colour] a CSS colour variable for a line that is not one Trader (a Track's average)
  */
+
+/** The dash pattern of each line style; The Index alone is dashed. */
+const DASH = { solid: undefined, dotted: [2, 4], dashdot: [10, 4, 2, 4] }
+
+/** @param {Line} l */
+const styleOf = (l) => l.style ?? (l.dotted ? 'dotted' : 'solid')
 
 /** @param {string} name */
 const token = (name) => getComputedStyle(document.documentElement).getPropertyValue(name).trim()
@@ -24,9 +32,10 @@ const token = (name) => getComputedStyle(document.documentElement).getPropertyVa
 /**
  * Portfolio value over time: one solid line per Trader in its colour, The
  * Index grey and dashed. Drawn with uPlot; redrawn when the look changes.
- * @param {{ dates: string[], lines: Line[], label: string, height?: number }} props
+ * @param {{ dates: string[], lines: Line[], label: string, height?: number, yValue?: (v: number) => string }} props
+ *   yValue: how the value axis reads (default dollars, from micro-dollars)
  */
-export function ValueChart({ dates, lines, label, height = 220 }) {
+export function ValueChart({ dates, lines, label, height = 220, yValue = (v) => usd(v * 1_000_000, { whole: true }) }) {
   const id = `chart-${++nextId}`
   /** @type {uPlot | null} */
   let plot = null
@@ -49,15 +58,15 @@ export function ValueChart({ dates, lines, label, height = 220 }) {
       scales: { x: { time: false } },
       axes: [
         { ...axis, values: (_u, ticks) => ticks.map((t) => day(new Date(t * 1000).toISOString().slice(0, 10), { weekday: false })), space: 70 },
-        { ...axis, side: 1, size: 64, values: (_u, ticks) => ticks.map((t) => usd(t * 1_000_000, { whole: true })) },
+        { ...axis, side: 1, size: 64, values: (_u, ticks) => ticks.map((t) => yValue(t)) },
       ],
       series: [
         {},
         ...lines.map((l) => ({
           label: l.name,
-          stroke: l.kind === 'benchmark' ? token('--color-index') : token(colourOf(l).slice(4, -1)),
-          width: l.kind === 'benchmark' ? 2 : l.dotted ? 2 : 2.5,
-          dash: l.kind === 'benchmark' ? [6, 5] : l.dotted ? [2, 4] : undefined,
+          stroke: l.kind === 'benchmark' ? token('--color-index') : token((l.colour ?? colourOf(l)).slice(4, -1)),
+          width: l.kind === 'benchmark' ? 2 : styleOf(l) !== 'solid' ? 2 : 2.5,
+          dash: l.kind === 'benchmark' ? [6, 5] : DASH[styleOf(l)],
           points: { show: dates.length === 1 },
           spanGaps: false,
         })),
@@ -82,7 +91,7 @@ export function ValueChart({ dates, lines, label, height = 220 }) {
   onLeave(() => { stop(); observer?.disconnect(); plot?.destroy(); plot = null })
 
   const last = (/** @type {Line} */ l) => [...l.values].reverse().find((v) => v !== null) ?? null
-  const summary = `${label}: ${lines.map((l) => `${displayName(l.name)} ${usd(last(l), { whole: true })}`).join(', ')}`
+  const summary = `${label}: ${lines.map((l) => { const v = last(l); return `${displayName(l.name)} ${v === null ? 'no value yet' : yValue(v / 1_000_000)}` }).join(', ')}`
 
   return html`
     <figure class="m-0 flex flex-col gap-2">

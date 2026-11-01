@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { day, dayRange, monthName, pct, shares, signedPct, usd } from '../../src/utils/format.js'
 import { alignHistories } from '../../src/utils/series.js'
-import { displayName, markOf, modelName } from '../../src/utils/traders.js'
+import { displayName, lineStyleOf, markOf, modelName } from '../../src/utils/traders.js'
 
 describe('format', () => {
   it('shows micro-dollars as dollars', () => {
@@ -33,6 +33,12 @@ describe('traders', () => {
     expect(displayName('Claude daily')).toBe('Claude · Daily')
     expect(displayName('The Index')).toBe('The Index')
     expect(modelName('DeepSeek weekly')).toBe('DeepSeek')
+    // A Trader in a later track: the model, then the track's words.
+    expect(displayName('Claude weekly research')).toBe('Claude · Weekly research')
+    expect(modelName('Claude weekly research')).toBe('Claude')
+    expect(displayName('Mistral Large daily')).toBe('Mistral Large · Daily')
+    expect(markOf({ name: 'Gemini weekly research', kind: 'ai' })).toBe('GE')
+    expect([0, 1, 2, 3].map(lineStyleOf)).toEqual(['solid', 'dotted', 'dashdot', 'dashdot'])
     expect(markOf({ name: 'Gemini weekly', kind: 'ai' })).toBe('GE')
     expect(markOf({ name: 'The Index', kind: 'benchmark' })).toBe('SPY')
     expect(markOf({ name: 'Mistral daily', kind: 'ai' })).toBe('MI')
