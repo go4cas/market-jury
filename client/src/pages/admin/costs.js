@@ -38,7 +38,7 @@ function CostsPage() {
             ? 'The projected spend has reached the budget ceiling. The Traders who search the web, the weekly Traders and the daily recap are paused; the other daily Traders and the weekly report keep running.'
             : 'The projected spend is over 90% of the budget. At 100% the Traders who search the web, the weekly Traders and the daily recap pause.') : ''}
           <dl class="grid grid-cols-3 gap-3">
-            ${[[`Spent so far in ${month}`, b.spentUsd, `since 1 ${short}`], [`Projected for all of ${month}`, b.projectedUsd, "at today's pace"], ['Monthly budget', b.ceilingUsd, 'set in Settings']].map(([label, value, hint]) => html`<div class="rounded-panel border border-line bg-surface-raised p-3"><dt class="prompt">${label}</dt><dd class="font-mono text-lg text-fg">${dollars(Number(value))}</dd><dd class="text-xs text-fg-soft">${hint}</dd></div>`)}
+            ${[[`Spent so far in ${month}`, b.spentUsd, `since 1 ${short}`], [`Projected for all of ${month}`, b.projectedUsd, "at today's pace, dry runs once"], ['Monthly budget', b.ceilingUsd, 'set in Settings']].map(([label, value, hint]) => html`<div class="rounded-panel border border-line bg-surface-raised p-3"><dt class="prompt">${label}</dt><dd class="font-mono text-lg text-fg">${dollars(Number(value))}</dd><dd class="text-xs text-fg-soft">${hint}</dd></div>`)}
           </dl>
           <div class="${`mj-meter${b.level === 'ok' ? '' : ' mj-meter--warn'}`}" role="img" aria-label="${caption}">
             <p class="font-mono text-sm text-fg" aria-hidden="true">${caption}</p>

@@ -283,6 +283,16 @@ describe('models and the budget guard', () => {
     expect(over.level).toBe('over')
     expect(['daily trader', 'weekly trader', 'daily recap', 'weekly report'].filter((k) => mayRun(over, /** @type {any} */ (k)))).toEqual(['daily trader', 'weekly report'])
   })
+
+  test('counts dry runs as spent but does not project them over the month', () => {
+    // Two dry runs on the 1st: what was spent, not thirty times it.
+    db.run("INSERT INTO runs (kind, model_id, status, dry_run, cost_micro, started_at) VALUES ('trader', 1, 'succeeded', 1, ?, '2026-11-01T13:30:00Z')", [toMicro(1.3)])
+    const first = budget(db, new Date('2026-11-01T14:00:00Z'))
+    expect(first).toMatchObject({ spentMicro: toMicro(1.3), projectedMicro: toMicro(1.3), level: 'ok' })
+    // Real runs set the pace on top.
+    db.run("INSERT INTO runs (kind, model_id, status, dry_run, cost_micro, started_at) VALUES ('trader', 1, 'succeeded', 0, ?, '2026-11-02T21:00:00Z')", [toMicro(0.5)])
+    expect(budget(db, new Date('2026-11-02T22:00:00Z')).projectedMicro).toBe(toMicro(1.3 + 7.5))
+  })
 })
 
 describe('waiting between attempts', () => {
