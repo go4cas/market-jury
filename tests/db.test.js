@@ -78,4 +78,14 @@ describe('migrations', () => {
     db.run(batch)
     expect(db.query("SELECT area, pr_number FROM platform_changes WHERE effective_on = '2026-10-26'").all()).toEqual([{ area: 'Briefing pack', pr_number: 44 }, { area: 'Briefing pack', pr_number: 44 }, { area: 'Prompt', pr_number: 44 }])
   })
+
+  test('the 2 Nov weekend batch logs its headline change only for an experiment already running', () => {
+    const batch = readFileSync(new URL('../db/migrations/0012_weekend_batch_2026_11_02.sql', import.meta.url), 'utf8')
+    const db = openDb(':memory:')
+    migrate(db)
+    expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE pr_number = 50").get()).toEqual({ n: 0 })
+    db.run("UPDATE settings SET start_date = '2026-10-05' WHERE id = 1")
+    db.run(batch)
+    expect(db.query("SELECT effective_on, area FROM platform_changes WHERE pr_number = 50").all()).toEqual([{ effective_on: '2026-11-02', area: 'Briefing pack' }])
+  })
 })

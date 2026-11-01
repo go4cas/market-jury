@@ -52,6 +52,17 @@ describe('choosing headlines for a pack', () => {
     expect(picked.filter((h) => h.publishedAt >= '2026-11-24T20:00:00Z')).toHaveLength(4)
   })
 
+  test('a busy half hour before the open does not crowd out the rest of the night', () => {
+    // Overnight from 21:00 to the open at 14:30 UTC: a steady trickle, then a rush just before the open.
+    const night = Array.from({ length: 8 }, (_, i) => item(new Date(Date.parse('2026-11-23T22:00:00Z') + i * 2 * 3_600_000).toISOString(), [`N${i}`]))
+    const rush = Array.from({ length: 20 }, (_, i) => item(new Date(Date.parse('2026-11-24T14:29:00Z') - i * 60_000).toISOString(), [`R${i}`]))
+    const cuts = [new Date('2026-11-24T14:30:00Z')]
+    const picked = pickHeadlines([...night, ...rush], { after, until, limit: 8, cuts, perTicker: 3 })
+    // Eight picks, four per slice share; the session slice is empty, so the night gets all eight, spread across it.
+    expect(picked).toHaveLength(8)
+    expect(picked.filter((h) => h.publishedAt < '2026-11-24T12:00:00Z').length).toBeGreaterThanOrEqual(4)
+  })
+
   test('caps analyst rating notes on menu stocks', () => {
     const notes = Array.from({ length: 6 }, (_, i) => item(new Date(Date.parse('2026-11-24T20:00:00Z') - i * 60_000).toISOString(), [`R${i}`], `Bank maintains Buy on R${i}, raises price target`))
     const news = item('2026-11-24T12:00:00Z', ['AAPL'], 'Apple opens a new plant')
