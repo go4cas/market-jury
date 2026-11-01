@@ -36,11 +36,12 @@ import { cashOf, closeOn, rulesFor, valuePortfolio } from './portfolio.js'
 
 /**
  * @param {Database} db
- * @param {{ traderId: number, runId?: number | null, date: string, orders: RequestedOrder[], dryRun?: boolean, now: Date }} options
+ * @param {{ traderId: number, runId?: number | null, date: string, orders: RequestedOrder[], dryRun?: boolean, cashOn?: string, now: Date }} options
  *   date: the trading date the decision was made on (its close is the reference price)
+ *   cashOn: the date to count cash up to, when not `date` (a dry run for a Trader who hasn't started yet)
  * @returns {Verdict[]} one per order, in the order given
  */
-export function checkOrders(db, { traderId, runId = null, date, orders, dryRun = false, now }) {
+export function checkOrders(db, { traderId, runId = null, date, orders, dryRun = false, cashOn = date, now }) {
   const rules = rulesFor(db, traderId, date)
   const fillOn = nextTradingDay(db, date)
   const fee = rules.per_trade_cost_micro
@@ -48,7 +49,7 @@ export function checkOrders(db, { traderId, runId = null, date, orders, dryRun =
 
   // The books as they stood at that close, even when the check runs later.
   const positions = positionsAsOf(db, traderId, date)
-  const portfolio = valuePortfolio(cashOf(db, traderId, date), positions, (id) => closeOn(db, id, date))
+  const portfolio = valuePortfolio(cashOf(db, traderId, cashOn), positions, (id) => closeOn(db, id, date))
   // What the Trader holds (micro-shares) and is worth per ticker, as orders are worked through.
   const held = new Map(portfolio.positions.map((p) => [p.instrument_id, p.quantity_micro]))
   const valueHeld = new Map(portfolio.positions.map((p) => [p.instrument_id, p.value_micro]))

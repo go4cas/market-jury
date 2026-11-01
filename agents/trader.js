@@ -138,9 +138,10 @@ Your answer: your orders, each with a plain-language reason; if there are none, 
  * @param {Database} db
  * @param {number} traderId
  * @param {string} date
+ * @param {string} [cashOn] the date to count cash up to, when not `date` (see cashDay)
  */
-export function traderBriefing(db, traderId, date) {
-  const v = valuePortfolio(cashOf(db, traderId, date), positionsAsOf(db, traderId, date), (id) => closeOn(db, id, date))
+export function traderBriefing(db, traderId, date, cashOn = date) {
+  const v = valuePortfolio(cashOf(db, traderId, cashOn), positionsAsOf(db, traderId, date), (id) => closeOn(db, id, date))
   const start = /** @type {{ v: number }} */ (db.query("SELECT COALESCE(SUM(amount_micro), 0) AS v FROM cash_ledger WHERE trader_id = ? AND kind = 'start'").get(traderId)).v
   const dollars = (/** @type {number} */ micro) => Math.round(micro / 10_000) / 100
   // The position cap in dollars, so a Trader needn't work it out (and ask for twice
@@ -211,6 +212,22 @@ export function withoutHeadlines(content) {
  */
 
 /**
+ * The date to count a Trader's cash up to. Normally the decision date; but in a
+ * dry run, a Trader whose first evening is still ahead (a new Track's) has its
+ * starting cash only from that day, so the rehearsal counts up to then and the
+ * Trader has its money to decide with. Real runs never see cash early.
+ * @param {Database} db
+ * @param {number} traderId
+ * @param {string} date
+ * @param {boolean} dryRun
+ */
+export function cashDay(db, traderId, date, dryRun) {
+  if (!dryRun) return date
+  const t = /** @type {{ started_on: string | null } | null} */ (db.query('SELECT started_on FROM traders WHERE id = ?').get(traderId))
+  return t?.started_on && t.started_on > date ? t.started_on : date
+}
+
+/**
  * Run one Trader on a briefing pack and queue its checked orders.
  * @param {object} o
  * @param {Database} o.db
@@ -228,7 +245,8 @@ export async function runTrader({ db, traderId, packId, dryRun = false, now, lan
   const pack = /** @type {{ kind: string, trading_date: string, content: string }} */ (db.query('SELECT kind, trading_date, content FROM briefing_packs WHERE id = ?').get(packId))
   const date = pack.trading_date
   const model = modelRow(db, trader.model_id)
-  const own = traderBriefing(db, traderId, date)
+  const cashOn = cashDay(db, traderId, date, dryRun)
+  const own = traderBriefing(db, traderId, date, cashOn)
   const track = trackOf(db, traderId)
   const pricesOnly = track?.briefing_pack === 'prices_only'
   /** @type {ReturnType<typeof searchFor>} */
@@ -274,7 +292,7 @@ export async function runTrader({ db, traderId, packId, dryRun = false, now, lan
       db.run('INSERT INTO decisions (run_id, trader_id, trading_date, market_view, journal, no_trades_reason) VALUES (?, ?, ?, ?, ?, ?)',
         [call.runId, traderId, date, answer.market_view, answer.journal, answer.orders.length ? null : answer.no_trades_reason])
       return checkOrders(db, {
-        traderId, runId: call.runId, date, dryRun, now: now(),
+        traderId, runId: call.runId, date, dryRun, cashOn, now: now(),
         orders: answer.orders.map((o) => ({ side: o.side, ticker: o.ticker, sellAll: o.side === 'sell' && o.sell_all, amountMicro: o.amount_usd === null ? null : toMicro(o.amount_usd), reason: o.reason })),
       })
     })()
