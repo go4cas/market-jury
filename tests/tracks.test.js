@@ -3,7 +3,7 @@ import { callModel } from '../agents/call.js'
 import { budget, mayRun } from '../agents/budget.js'
 import { modelRow } from '../agents/models.js'
 import { DEEPSEEK_SEARCH_URL, nativeSearchTools, SEARCH_FEE_MICRO, searchesIn, searchFor, searchResults, sharedSearchTool } from '../agents/search.js'
-import { answerSchema, endMoved, instructions, runTrader, withoutHeadlines } from '../agents/trader.js'
+import { answerSchema, cashDay, endMoved, instructions, runTrader, traderBriefing, withoutHeadlines } from '../agents/trader.js'
 import { DEFAULT_RULES } from '../core/portfolio.js'
 import { checkNewTrack, describeTrack, modelLabel, slugFor, trackOf, tracks } from '../core/tracks.js'
 import { checkEndDate, createTrack, renameTrack, startExperiment } from '../jobs/experiment.js'
@@ -167,6 +167,19 @@ describe('what a Track\'s Traders are told', () => {
     // Once it has run after the move, it isn't told again.
     run('2026-11-24', '2026-11-25T02:00:00Z')
     expect(endMoved(fresh, trader, '2026-11-25')).toBeNull()
+  })
+})
+
+describe('dry runs for a Track that has not started', () => {
+  test("a dry run counts a not-yet-started Trader's starting cash, a real run never does", () => {
+    const late = /** @type {number} */ (aTrader(db, { name: 'Claude weekly research', startedOn: '2026-11-06' }))
+    expect(cashDay(db, late, MON, false)).toBe(MON)
+    expect(cashDay(db, late, MON, true)).toBe('2026-11-06')
+    expect(cashDay(db, 1, MON, true)).toBe(MON)
+    expect(traderBriefing(db, late, MON).portfolio.cash_usd).toBe(0)
+    const rehearsal = traderBriefing(db, late, MON, cashDay(db, late, MON, true)).portfolio
+    expect(rehearsal.cash_usd).toBe(1000)
+    expect(rehearsal.max_buy_usd).toBeGreaterThan(0)
   })
 })
 
