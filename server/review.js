@@ -73,7 +73,7 @@ export function reviewExport(db, range) {
     instruments: all('SELECT * FROM instruments ORDER BY id'),
     rule_sets: all('SELECT * FROM rule_sets ORDER BY id'),
     step_runs: all('SELECT * FROM step_runs ORDER BY id'),
-    runs: all(`SELECT id, kind, trader_id, model_id, pack_id, dry_run, status, attempt, prompt, response, tokens_in, tokens_out, tokens_cached, cost_micro, error, started_at, finished_at
+    runs: all(`SELECT id, kind, trader_id, model_id, pack_id, dry_run, status, attempt, prompt, response, tokens_in, tokens_out, tokens_cached, searches, cost_micro, error, started_at, finished_at
                FROM runs WHERE substr(started_at, 1, 10) BETWEEN ? AND date(?, '+${RUN_DAYS_AFTER} days') ORDER BY id`, from, to)
       .map((/** @type {any} */ { prompt, ...run }) => ({ ...run, prompt_tail: promptTail(prompt) })),
     briefing_packs: all('SELECT * FROM briefing_packs WHERE trading_date BETWEEN ? AND ? ORDER BY id', from, to),

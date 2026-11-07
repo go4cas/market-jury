@@ -1,4 +1,4 @@
-{"version":"2026-10-19","source":"S&P 500 members from github.com/datasets/s-and-p-500-companies (commit 05a928d, 2026-09-21) plus the PRD's 21 major ETFs","instruments":[
+{"version":"2026-11-09","source":"S&P 500 members from github.com/datasets/s-and-p-500-companies (commit 05a928d, 2026-09-21) plus the PRD's 21 major ETFs","instruments":[
 {"ticker":"A","name":"Agilent Technologies","assetClass":"stock"},
 {"ticker":"AAPL","name":"Apple Inc.","assetClass":"stock"},
 {"ticker":"ABBV","name":"AbbVie","assetClass":"stock"},
@@ -277,7 +277,6 @@
 {"ticker":"KMI","name":"Kinder Morgan","assetClass":"stock"},
 {"ticker":"KO","name":"Coca-Cola Company (The)","assetClass":"stock"},
 {"ticker":"KR","name":"Kroger","assetClass":"stock"},
-{"ticker":"KVUE","name":"Kenvue","assetClass":"stock"},
 {"ticker":"L","name":"Loews Corporation","assetClass":"stock"},
 {"ticker":"LDOS","name":"Leidos","assetClass":"stock"},
 {"ticker":"LEN","name":"Lennar","assetClass":"stock"},

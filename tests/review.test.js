@@ -72,6 +72,7 @@ describe('Review export', () => {
       expect(body[key].length).toBeGreaterThan(0)
     }
     expect(body.runs[0].prompt).toBeUndefined()
+    expect(body.runs[0].searches).toBe(0)
     expect(typeof body.runs[0].prompt_tail).toBe('string')
     expect(body.runs[0].prompt_tail).not.toContain('<briefing_pack')
   })

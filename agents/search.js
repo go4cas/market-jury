@@ -131,7 +131,7 @@ export function searchResults(body) {
  * @param {string} provider
  * @param {Record<string, string | undefined>} [env]
  * @param {typeof fetch} [fetchFn]
- * @returns {{ tools: Record<string, import('ai').Tool>, feeMicro: number, maxSearches: number }}
+ * @returns {{ tools: Record<string, import('ai').Tool>, feeMicro: number, maxSearches: number, limitStep?: LimitStep }}
  */
 export function searchFor(track, provider, env = process.env, fetchFn = fetch) {
   if (!track || track.web_search === 'off' || track.searches_per_run < 1) return { tools: {}, feeMicro: 0, maxSearches: 0 }
@@ -141,6 +141,30 @@ export function searchFor(track, provider, env = process.env, fetchFn = fetch) {
     tools: nativeSearchTools(provider, max, env, fetchFn),
     feeMicro: /** @type {Record<string, number>} */ (SEARCH_FEE_MICRO)[provider] ?? 0,
     maxSearches: max,
+    limitStep: nativeSearchLimit(provider, max),
+  }
+}
+
+/** @typedef {(searchesSoFar: number, toolNames: string[]) => { activeTools?: string[], providerOptions?: Record<string, any> } | undefined} LimitStep */
+
+/**
+ * Keeps a run's native searches within the Track's cap where the provider's
+ * tool has no limit of its own (Anthropic's has `maxUses`; the shared tool
+ * counts its calls). OpenAI is told how many searches are left for each
+ * round (`maxToolCalls`, which counts only its own built-in tools); Gemini's
+ * Google Search can run several queries in one round, so it is taken away once
+ * the run has used its share. Either way the search tool leaves once the cap is met.
+ * @param {string} provider
+ * @param {number} max
+ * @returns {LimitStep | undefined}
+ */
+export function nativeSearchLimit(provider, max) {
+  if (provider !== 'openai' && provider !== 'google') return undefined
+  const searchTool = provider === 'openai' ? 'web_search' : 'google_search'
+  return (searchesSoFar, toolNames) => {
+    const left = max - searchesSoFar
+    if (left <= 0) return { activeTools: toolNames.filter((n) => n !== searchTool) }
+    return provider === 'openai' ? { providerOptions: { openai: { maxToolCalls: left } } } : undefined
   }
 }
 
