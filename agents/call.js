@@ -51,6 +51,7 @@ export function retryDelay(e, attempt) {
  * @property {Record<string, import('ai').Tool>} [tools]
  * @property {number} [maxSteps] model calls allowed, counting tool rounds and the final answer
  * @property {number} [searchFeeMicro] what one web search costs, on top of the tokens
+ * @property {import('./search.js').LimitStep} [limitStep] keeps native web searches within the run's cap
  * @property {() => Date} now
  * @property {(ms: number) => Promise<void>} [sleep]
  * @property {typeof generateText} [generate] replaced in tests
@@ -89,6 +90,7 @@ export async function callModel(o) {
         output: Output.object({ schema: o.schema }),
         tools: o.tools,
         stopWhen: isStepCount(o.maxSteps ?? 1),
+        ...(o.limitStep && { prepareStep: () => /** @type {any} */ (o.limitStep)?.(searches, Object.keys(o.tools ?? {})) }),
         reasoning: reasoningFor(model),
         maxRetries: 0,
         abortSignal: AbortSignal.timeout(ATTEMPT_TIMEOUT_MS),

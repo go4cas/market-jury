@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, test } from 'bun:test'
 import { callModel } from '../agents/call.js'
 import { budget, mayRun } from '../agents/budget.js'
 import { modelRow } from '../agents/models.js'
-import { DEEPSEEK_SEARCH_URL, nativeSearchTools, SEARCH_FEE_MICRO, searchesIn, searchFor, searchResults, sharedSearchTool } from '../agents/search.js'
+import { DEEPSEEK_SEARCH_URL, nativeSearchLimit, nativeSearchTools, SEARCH_FEE_MICRO, searchesIn, searchFor, searchResults, sharedSearchTool } from '../agents/search.js'
 import { answerSchema, cashDay, endMoved, instructions, runTrader, traderBriefing, withoutHeadlines } from '../agents/trader.js'
 import { DEFAULT_RULES } from '../core/portfolio.js'
 import { checkNewTrack, describeTrack, modelLabel, slugFor, trackOf, tracks } from '../core/tracks.js'
@@ -229,6 +229,32 @@ describe('web search', () => {
     expect(r.ok).toBe(true)
     // Two rounds of 1,000 tokens in at $2 and 100 out at $10 per million, plus one $0.01 search.
     expect(db.query('SELECT searches, cost_micro FROM runs').get()).toEqual({ searches: 1, cost_micro: 2 * 2_000 + 2 * 1_000 + 10_000 })
+  })
+
+  test("GPT's and Gemini's own searches are kept within the Track's cap, like Claude's", async () => {
+    // Claude's search has its own maxUses, and the shared tool counts its calls.
+    expect(nativeSearchLimit('anthropic', 5)).toBeUndefined()
+    expect(searchFor({ web_search: 'native', searches_per_run: 5 }, 'openai', {}).limitStep).toBeFunction()
+    expect(searchFor({ web_search: 'native', searches_per_run: 5 }, 'google', {}).limitStep).toBeFunction()
+    // Gemini may run several queries in one round, so its search goes once the share is used.
+    const gemini = /** @type {import('../agents/search.js').LimitStep} */ (nativeSearchLimit('google', 5))
+    expect(gemini(4, ['get_price_history', 'google_search'])).toBeUndefined()
+    expect(gemini(5, ['get_price_history', 'google_search'])).toEqual({ activeTools: ['get_price_history'] })
+
+    // OpenAI is told how many are left each round, and loses the tool at the cap.
+    const fakeFetch = /** @type {typeof fetch} */ (/** @type {unknown} */ (async () => new Response(JSON.stringify({ results: [] }))))
+    const mock = mockModel([
+      { toolCalls: [{ name: 'web_search', input: { query: 'apple' } }] },
+      { toolCalls: [{ name: 'web_search', input: { query: 'nvidia' } }] },
+      answer(),
+    ])
+    const r = await callModel({
+      db, model: modelRow(db, 1), languageModel: mock.model, kind: 'trader', traderId: 1, system: 's', messages: [{ role: 'user', content: 'go' }],
+      schema: answerSchema, tools: sharedSearchTool(9, { DEEPSEEK_API_KEY: 'key' }, fakeFetch), maxSteps: 5, limitStep: nativeSearchLimit('openai', 2), now, sleep: noSleep,
+    })
+    expect(r.ok).toBe(true)
+    expect(mock.calls.map((c) => c.providerOptions?.openai?.maxToolCalls)).toEqual([2, 1, undefined])
+    expect(mock.calls.map((c) => (c.tools ?? []).map((/** @type {any} */ t) => t.name))).toEqual([['web_search'], ['web_search'], []])
   })
 
   test('at the budget ceiling, Traders who search the web pause first', () => {

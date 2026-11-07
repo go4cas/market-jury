@@ -88,4 +88,19 @@ describe('migrations', () => {
     db.run(batch)
     expect(db.query("SELECT effective_on, area FROM platform_changes WHERE pr_number = 50").all()).toEqual([{ effective_on: '2026-11-02', area: 'Briefing pack' }])
   })
+
+  test('the 9 Nov weekend batch takes KVUE off the menu and logs its changes, only for an experiment already running', () => {
+    const batch = readFileSync(new URL('../db/migrations/0013_weekend_batch_2026_11_09.sql', import.meta.url), 'utf8')
+    const db = openDb(':memory:')
+    migrate(db)
+    expect(db.query("SELECT COUNT(*) AS n FROM platform_changes WHERE effective_on = '2026-11-09'").get()).toEqual({ n: 0 })
+    db.run("UPDATE settings SET start_date = '2026-10-05' WHERE id = 1")
+    db.run("INSERT INTO instruments (ticker, name, added_on) VALUES ('KVUE', 'Kenvue', '2026-10-01'), ('AAPL', 'Apple', '2026-10-01')")
+    db.run(batch)
+    expect(db.query('SELECT ticker, on_menu, removed_on FROM instruments ORDER BY ticker').all()).toEqual([
+      { ticker: 'AAPL', on_menu: 1, removed_on: null },
+      { ticker: 'KVUE', on_menu: 0, removed_on: '2026-11-09' },
+    ])
+    expect(db.query("SELECT area FROM platform_changes WHERE effective_on = '2026-11-09'").all()).toEqual([{ area: 'Tracks' }, { area: 'Briefing pack' }])
+  })
 })

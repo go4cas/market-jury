@@ -280,6 +280,7 @@ export async function runTrader({ db, traderId, packId, dryRun = false, now, lan
     schema: answerSchema,
     tools: { ...tools, ...search.tools },
     maxSteps: MAX_LOOKUPS + search.maxSearches + 2,
+    limitStep: search.limitStep,
     searchFeeMicro: search.feeMicro,
   })
   if (!call.ok) return { ok: false, runId: call.runId, costMicro: call.costMicro, error: call.error, verdicts: [] }
