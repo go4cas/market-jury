@@ -152,6 +152,20 @@ describe('a Trader run, guarded', () => {
     expect(answerSchema.safeParse(traderAnswer).success).toBe(true)
   })
 
+  test('a placeholder answer is retried instead of becoming the Trader\'s record', async () => {
+    // The 13 Nov answer that got through: a one-cent order "placeholder", and "x" as view and journal.
+    const stub = { orders: [{ side: 'buy', ticker: 'SPY', amount_usd: 0.01, sell_all: false, reason: 'placeholder' }], no_trades_reason: null, market_view: 'x', journal: 'x' }
+    expect(answerSchema.safeParse(stub).success).toBe(false)
+    expect(answerSchema.safeParse({ ...traderAnswer, market_view: 'x' }).success).toBe(false)
+    expect(answerSchema.safeParse({ ...traderAnswer, journal: 'TBD' }).success).toBe(false)
+    expect(answerSchema.safeParse({ ...traderAnswer, orders: [{ ...traderAnswer.orders[1], reason: 'placeholder' }] }).success).toBe(false)
+    const mock = mockModel([{ text: JSON.stringify(stub) }, answer()])
+    const result = await run(mock)
+    expect(result.ok).toBe(true)
+    expect(mock.calls).toHaveLength(2)
+    expect(db.query('SELECT journal FROM decisions').get()).toEqual({ journal: traderAnswer.journal })
+  })
+
   test('if its orders cannot be checked, nothing of the decision is kept, so it can be asked again', async () => {
     db.run("CREATE TRIGGER desk_down BEFORE INSERT ON orders BEGIN SELECT RAISE(ABORT, 'the desk is down'); END")
     const result = await run(mockModel([answer()]))
@@ -165,6 +179,9 @@ describe('a Trader run, guarded', () => {
     // $1,000.037 makes the 20% cap $200.0074: shown as $200.00, not $200.01.
     const odd = aTrader(db, { name: 'Odd daily', cash: 1000.037 })
     expect(traderBriefing(db, odd, MON).portfolio.max_buy_usd).toBe(200)
+    // Cash too: $32.758059 is shown as $32.75, so an order for all of it isn't trimmed.
+    const small = aTrader(db, { name: 'Small daily', cash: 32.758059 })
+    expect(traderBriefing(db, small, MON).portfolio.cash_usd).toBe(32.75)
   })
 
   test('a briefing for a past evening shows the books of that evening, not later fills', async () => {

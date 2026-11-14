@@ -15,6 +15,7 @@
     "trade-master:setup": "bun scripts/setup-trade-master.js",
     "floor-runner": "bun scripts/floor-runner.js",
     "models:check": "bun scripts/models-check.js",
+    "replay-run": "bun scripts/replay-run.js",
     "test": "bun test && vitest run",
     "test:server": "bun test",
     "test:client": "vitest run",
