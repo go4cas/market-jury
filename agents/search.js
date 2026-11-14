@@ -33,6 +33,8 @@ export const SEARCH_FEE_MICRO = {
 
 /** The tool names that count as one web search each when they are called. */
 export const SEARCH_TOOL_NAMES = ['web_search']
+/** How Gemini's own search shows up among a round's tool calls. */
+export const GEMINI_SEARCH_CALL = 'server:GOOGLE_SEARCH_WEB'
 
 /**
  * The provider's own factory for a tool: the first of `names` it offers.
@@ -175,6 +177,9 @@ export function nativeSearchLimit(provider, max) {
  */
 export function searchesIn(step) {
   const calls = (step.toolCalls ?? []).filter((c) => SEARCH_TOOL_NAMES.includes(c.toolName)).length
+  // Gemini's Google Search comes back as one server tool call per query; older
+  // responses carried the queries in grounding metadata instead.
+  const google = (step.toolCalls ?? []).filter((c) => c.toolName === GEMINI_SEARCH_CALL).length
   const grounded = step.providerMetadata?.google?.groundingMetadata?.webSearchQueries
-  return calls + (Array.isArray(grounded) ? grounded.length : 0)
+  return calls + (google || (Array.isArray(grounded) ? grounded.length : 0))
 }

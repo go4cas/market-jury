@@ -206,9 +206,13 @@ describe('web search', () => {
     expect(searchResults(null)).toEqual([])
   })
 
-  test('counts search tool calls and Gemini grounding queries', () => {
+  test('counts search tool calls and Gemini\'s searches', () => {
     expect(searchesIn({ toolCalls: [{ toolName: 'web_search' }, { toolName: 'get_headlines' }] })).toBe(1)
     expect(searchesIn({ toolCalls: [], providerMetadata: { google: { groundingMetadata: { webSearchQueries: ['a', 'b'] } } } })).toBe(2)
+    // Gemini's own search today: one server tool call per query, and no grounding metadata.
+    expect(searchesIn({ toolCalls: [{ toolName: 'server:GOOGLE_SEARCH_WEB' }, { toolName: 'server:GOOGLE_SEARCH_WEB' }, { toolName: 'get_price_history' }] })).toBe(2)
+    // Counted once when both arrive.
+    expect(searchesIn({ toolCalls: [{ toolName: 'server:GOOGLE_SEARCH_WEB' }], providerMetadata: { google: { groundingMetadata: { webSearchQueries: ['a'] } } } })).toBe(1)
   })
 
   test('a Track without web search gets no tools and pays no search fee', () => {

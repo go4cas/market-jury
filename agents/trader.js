@@ -24,6 +24,9 @@ const MAX_AMOUNT_USD = 1_000_000_000
 const MAX_TEXT = { ticker: 12, reason: 1000, no_trades_reason: 2000, market_view: 3000, journal: 4000 }
 
 const words = (/** @type {string} */ s) => s.trim().split(/\s+/).filter(Boolean).length
+/** Shortest market view or journal that can be a real one; "x" is a placeholder, not a decision. */
+const MIN_TEXT = 20
+const PLACEHOLDER = /\bplaceholder\b|\blorem ipsum\b|^\s*(x+|tbd|todo|n\/a|\.+|-+)\s*$/i
 
 /** The answer every Trader must give. Nullable rather than optional fields keep it valid for every provider's strict mode. */
 export const answerSchema = z.object({
@@ -54,7 +57,12 @@ export const answerSchema = z.object({
     if (o.amount_usd !== null && !(Number.isFinite(o.amount_usd) && o.amount_usd <= MAX_AMOUNT_USD)) ctx.addIssue({ code: 'custom', path: ['orders', i, 'amount_usd'], message: `Give an amount of at most $${MAX_AMOUNT_USD.toLocaleString('en-US')}.` })
     tooLong(['orders', i, 'ticker'], o.ticker, MAX_TEXT.ticker)
     tooLong(['orders', i, 'reason'], o.reason, MAX_TEXT.reason)
+    if (PLACEHOLDER.test(o.reason)) ctx.addIssue({ code: 'custom', path: ['orders', i, 'reason'], message: 'Give the real reason for this order, not a placeholder.' })
   })
+  // A well-formed answer can still be a stub; it is retried rather than kept as the Trader's record.
+  for (const key of /** @type {const} */ (['market_view', 'journal'])) {
+    if (a[key].trim().length < MIN_TEXT || PLACEHOLDER.test(a[key])) ctx.addIssue({ code: 'custom', path: [key], message: `Write your real ${key === 'journal' ? 'journal' : 'market view'}, not a placeholder.` })
+  }
 })
 
 /** @typedef {z.infer<typeof answerSchema>} TraderAnswer */
@@ -149,12 +157,13 @@ export function traderBriefing(db, traderId, date, cashOn = date) {
   const rules = rulesFor(db, traderId, date)
   const capMicro = mulDiv(v.total, Math.round(rules.position_cap_pct * 100), 10_000)
   const spendable = v.cash - rules.per_trade_cost_micro
-  // Rounded down to the cent: an order for exactly max_buy_usd always fits.
-  const maxBuy = (/** @type {number} */ heldMicro) => Math.floor(Math.max(0, Math.min(capMicro - heldMicro, spendable)) / 10_000) / 100
+  // Cash and max_buy_usd are rounded down to the cent: an order for exactly either always fits.
+  const centsDown = (/** @type {number} */ micro) => Math.floor(micro / 10_000) / 100
+  const maxBuy = (/** @type {number} */ heldMicro) => centsDown(Math.max(0, Math.min(capMicro - heldMicro, spendable)))
   const portfolio = {
     date,
     total_value_usd: dollars(v.total),
-    cash_usd: dollars(v.cash),
+    cash_usd: centsDown(v.cash),
     starting_value_usd: dollars(start),
     max_buy_usd: maxBuy(0),
     positions: v.positions.map((p) => ({
