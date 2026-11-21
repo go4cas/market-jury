@@ -166,6 +166,16 @@ describe('a Trader run, guarded', () => {
     expect(db.query('SELECT journal FROM decisions').get()).toEqual({ journal: traderAnswer.journal })
   })
 
+  test('a real answer that mentions a placeholder is not mistaken for one', () => {
+    // Claude weekly research, 20 Nov: a sound answer, refused four times because its journal named last week's stub.
+    const journal = 'Kept about half in cash on purpose. The 2026-11-13 SPY buy was a rejected placeholder order, not a real position.'
+    expect(answerSchema.safeParse({ ...traderAnswer, journal }).success).toBe(true)
+    expect(answerSchema.safeParse({ ...traderAnswer, market_view: `Broad selloff; ${journal}` }).success).toBe(true)
+    expect(answerSchema.safeParse({ ...traderAnswer, orders: [{ ...traderAnswer.orders[1], reason: 'Replaces last week\'s placeholder order with a real position.' }] }).success).toBe(true)
+    expect(answerSchema.safeParse({ ...traderAnswer, journal: '  Placeholder  ' }).success).toBe(false)
+    expect(answerSchema.safeParse({ ...traderAnswer, journal: 'Lorem ipsum dolor sit amet, consectetur.' }).success).toBe(false)
+  })
+
   test('if its orders cannot be checked, nothing of the decision is kept, so it can be asked again', async () => {
     db.run("CREATE TRIGGER desk_down BEFORE INSERT ON orders BEGIN SELECT RAISE(ABORT, 'the desk is down'); END")
     const result = await run(mockModel([answer()]))

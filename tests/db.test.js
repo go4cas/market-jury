@@ -89,6 +89,16 @@ describe('migrations', () => {
     expect(db.query("SELECT effective_on, area FROM platform_changes WHERE pr_number = 50").all()).toEqual([{ effective_on: '2026-11-02', area: 'Briefing pack' }])
   })
 
+  test('the narrower placeholder check logs its change only for an experiment already running', () => {
+    const batch = readFileSync(new URL('../db/migrations/0015_placeholder_check_2026_11_23.sql', import.meta.url), 'utf8')
+    const db = openDb(':memory:')
+    migrate(db)
+    expect(db.query('SELECT COUNT(*) AS n FROM platform_changes WHERE pr_number = 53').get()).toEqual({ n: 0 })
+    db.run("UPDATE settings SET start_date = '2026-10-05' WHERE id = 1")
+    db.run(batch)
+    expect(db.query('SELECT effective_on, area FROM platform_changes WHERE pr_number = 53').all()).toEqual([{ effective_on: '2026-11-23', area: 'Rules' }])
+  })
+
   test('the 9 Nov weekend batch takes KVUE off the menu and logs its changes, only for an experiment already running', () => {
     const batch = readFileSync(new URL('../db/migrations/0013_weekend_batch_2026_11_09.sql', import.meta.url), 'utf8')
     const db = openDb(':memory:')

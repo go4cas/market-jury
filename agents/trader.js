@@ -26,7 +26,8 @@ const MAX_TEXT = { ticker: 12, reason: 1000, no_trades_reason: 2000, market_view
 const words = (/** @type {string} */ s) => s.trim().split(/\s+/).filter(Boolean).length
 /** Shortest market view or journal that can be a real one; "x" is a placeholder, not a decision. */
 const MIN_TEXT = 20
-const PLACEHOLDER = /\bplaceholder\b|\blorem ipsum\b|^\s*(x+|tbd|todo|n\/a|\.+|-+)\s*$/i
+/** A field that is nothing but a placeholder. Only the whole field counts: a real sentence about "last week's placeholder order" is fine. */
+const PLACEHOLDER = /^\s*(placeholder|lorem ipsum.*|x+|tbd|todo|n\/a|\.+|-+)\s*$/i
 
 /** The answer every Trader must give. Nullable rather than optional fields keep it valid for every provider's strict mode. */
 export const answerSchema = z.object({
